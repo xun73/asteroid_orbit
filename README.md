@@ -47,10 +47,12 @@ asteroid_orbit/
 ## 🧪 科學公式參考 (Scientific Formulas)
 
 本程式包含以下天文物理計算：
-- **軌道週期**: $T = 2\pi \sqrt{rac{a^3}{GM}}$
-- **活力公式 (Orbital Velocity)**: $v = \sqrt{GM_\odot \left( rac{2}{r} - rac{1}{a} ight)}$
-- **距離公式**: $r = rac{a(1-e^2)}{1+e \cos 
-u}$
+- **軌道週期**:
+  $$T = 2\pi \sqrt{\frac{a^3}{GM}}$$
+- **活力公式 (Orbital Velocity)**:
+  $$v = \sqrt{GM_\odot \left( \frac{2}{r} - \frac{1}{a} \right)}$$
+- **距離公式**:
+  $$r = \frac{a(1-e^2)}{1+e \cos \nu}$$
 
 ---
 
