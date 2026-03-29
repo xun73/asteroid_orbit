@@ -1,0 +1,1908 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>小行星軌道與天球互動模擬</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background-color: #ffffff; 
+            color: #333; 
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        
+        .views-wrapper { 
+            flex: 1; 
+            display: flex; 
+            width: 100vw; 
+            border-bottom: 2px solid #ddd;
+            min-height: 0; 
+        }
+        .view { 
+            flex: 1; 
+            position: relative; 
+            background: #000; 
+            min-height: 0;
+            display: flex; 
+        }
+        .view canvas {
+            display: block;
+            width: 100% !important;
+            height: 100% !important;
+            outline: none;
+        }
+        #heliocentric { border-right: 2px solid #ddd; background: #fdfdfd; }
+        #geocentric { background: #fdfdfd; }
+        
+        .label { 
+            position: absolute; 
+            top: 10px; 
+            left: 10px; 
+            background: rgba(255,255,255,0.9); 
+            color: #333; 
+            padding: 6px 10px; 
+            border-radius: 6px; 
+            pointer-events: none; 
+            z-index: 10; 
+            border: 1px solid #ccc; 
+            font-weight: bold; 
+            font-size: 0.85rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .controls-wrapper { 
+            flex-shrink: 0; 
+            max-height: 45vh; 
+            width: 100%; 
+            background: #f8f9fa; 
+            padding: 10px 20px; 
+            overflow-y: auto; 
+            box-sizing: border-box;
+        }
+        
+        .controls-grid { 
+            display: grid; 
+            /* 4 欄: 參數區(2.8fr) | 顯示+資訊(1.2fr) | 時間區(1.3fr) | MPCORB+MPC觀測(1.8fr) */
+            grid-template-columns: 2.5fr 2fr 1.3fr; 
+            gap: 12px; 
+        }
+        
+        @media (max-width: 1024px) {
+            .controls-grid { grid-template-columns: 1fr; }
+        }
+
+        #mpc-input { 
+            width: 100%; 
+            font-family: monospace; 
+            font-size: 0.72rem; 
+            resize: vertical; 
+            border: 1px solid #ccc; 
+            border-radius: 4px; 
+            padding: 4px 6px; 
+            box-sizing: border-box;
+            background: #fdfdfd;
+        }
+        #mpc-status { font-size: 0.75rem; color: #666; margin-top: 3px; min-height: 1.2em; }
+        .mpc-legend-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+        
+        .presets { 
+            display: flex; 
+            flex-wrap: wrap; 
+            gap: 8px; 
+            align-items: center; 
+            border-bottom: 1px solid #ddd; 
+            padding-bottom: 8px; 
+            margin-bottom: 8px;
+        }
+        
+        .preset-btn { 
+            padding: 5px 12px; 
+            font-size: 0.8rem; 
+            border: 1px solid #007bff; 
+            border-radius: 6px; 
+            background: #e6f2ff; 
+            color: #007bff; 
+            cursor: pointer; 
+            font-weight: bold; 
+            transition: all 0.2s;
+        }
+        .preset-btn:hover, .preset-btn.active-preset { 
+            background: #007bff; 
+            color: white; 
+        }
+        
+        .control-group { display: flex; flex-direction: column; gap: 4px; }
+        input[type=range], input[type=date], input[type=checkbox] { cursor: pointer; }
+        input[type=range], input[type=date] { width: 100%; }
+        input[type=date] { padding: 4px; border: 1px solid #ccc; border-radius: 4px; font-family: inherit; font-size: 0.8rem; }
+        label { font-size: 0.8rem; color: #444; display: flex; justify-content: space-between; align-items: center; font-weight: bold; margin-top: 4px; }
+        span.val { color: #007bff; font-weight: bold; font-size: 0.85rem; }
+        
+        .btn-group { display: flex; gap: 6px; margin-top: 5px; flex-wrap: wrap; }
+        button.action-btn { flex: 1; padding: 6px; font-size: 0.75rem; border: 1px solid #ccc; border-radius: 4px; background: #fff; cursor: pointer; font-weight: bold; transition: background 0.2s; }
+        button.action-btn:hover { background: #e2e6ea; }
+        button.action-btn.active { background: #007bff; color: white; border-color: #0056b3; }
+        
+        @media (max-width: 768px) {
+            body { height: auto; overflow: auto; }
+            .views-wrapper { flex-direction: column; height: 60vh; flex: none; }
+            #heliocentric { border-right: none; border-bottom: 2px solid #ddd; }
+            .controls-wrapper { max-height: none; overflow: visible; padding-bottom: 30px; }
+        }
+
+        /* 軌道資訊面板 */
+        .orbit-info-row { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:2px; }
+        .orbit-info-label { font-size:0.72rem; color:#555; }
+        .orbit-info-val { font-size:0.76rem; font-weight:bold; color:#1d4ed8; font-family:monospace; }
+
+        /* 能量資訊格子 */
+        .energy-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 4px;
+            margin-top: 4px;
+        }
+        .energy-card {
+            border-radius: 5px;
+            padding: 4px 6px;
+            text-align: center;
+            position: relative;
+            cursor: help;
+        }
+        .energy-card.kinetic  { background:#eff6ff; border:1px solid #bfdbfe; }
+        .energy-card.potential{ background:#f0fdf4; border:1px solid #bbf7d0; }
+        .energy-card.total    { background:#faf5ff; border:1px solid #e9d5ff; }
+        .energy-card .e-label { font-size:0.68rem; color:#555; font-weight:bold; }
+        .energy-card .e-val   { font-size:0.78rem; font-weight:bold; font-family:monospace; display:block; margin-top:1px; }
+        .energy-card.kinetic   .e-val { color:#1d4ed8; }
+        .energy-card.potential .e-val { color:#15803d; }
+        .energy-card.total     .e-val { color:#7e22ce; }
+
+        /* Tooltip 浮動說明框 */
+        .formula-tooltip {
+            display: none;
+            position: fixed;
+            z-index: 9999;
+            background: #1e293b;
+            color: #f1f5f9;
+            border-radius: 8px;
+            padding: 10px 13px;
+            font-size: 0.75rem;
+            line-height: 1.6;
+            max-width: 300px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+            pointer-events: none;
+        }
+        .formula-tooltip .tt-title {
+            font-weight: bold;
+            font-size: 0.8rem;
+            color: #7dd3fc;
+            margin-bottom: 5px;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 3px;
+        }
+        .formula-tooltip .tt-formula {
+            font-family: monospace;
+            background: #0f172a;
+            border-radius: 4px;
+            padding: 4px 7px;
+            margin: 4px 0;
+            font-size: 0.76rem;
+            color: #fde68a;
+        }
+        .formula-tooltip .tt-note {
+            font-size: 0.7rem;
+            color: #94a3b8;
+            margin-top: 4px;
+        }
+
+        /* 軌道參數列 */
+        .param-row { display: flex; flex-direction: column; gap: 2px; }
+        .param-label { font-size: 0.8rem; font-weight: bold; color: #333; }
+
+        /* 數字輸入框 */
+        .param-numbox {
+            width: 110px;
+            font-size: 0.78rem;
+            font-family: monospace;
+            border: 1px solid #bbb;
+            border-radius: 4px;
+            padding: 2px 5px;
+            text-align: right;
+            color: #007bff;
+            font-weight: bold;
+            background: #f5faff;
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+        .param-numbox:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 2px rgba(0,123,255,0.18);
+            background: #fff;
+        }
+        .param-numbox.invalid {
+            border-color: #dc3545;
+            background: #fff5f5;
+        }
+    </style>
+</head>
+<body>
+    <button id="lang-toggle-btn" style="position: absolute; top: 15px; right: 20px; z-index: 1000; padding: 6px 12px; background: #007bff; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+        Switch to Chinese (切換為中文)
+    </button>
+
+    <div class="views-wrapper">
+        <div id="heliocentric" class="view">
+            <div class="label" id="lbl-helio">Solar System View (Heliocentric)</div>
+        </div>
+        <div id="geocentric" class="view">
+            <div class="label" id="lbl-geo">Celestial Sphere (Geocentric)</div>
+        </div>
+    </div>
+
+    <div id="controls" class="controls-wrapper">
+        <div class="controls-grid">
+            <!-- 欄位 1: 快速載入與小行星軌道參數 -->
+            <div class="control-group bg-white p-3 rounded shadow-sm border border-gray-200">
+                <div class="presets">
+                    <span id="lbl-quick-load" class="text-sm font-bold text-gray-700 self-center mr-1">Quick Load:</span>
+                    <button class="preset-btn" onclick="setPreset(0.72333566,0.00677323,3.39467,76.67984,54.85229,78.93,this,2461000.5)" data-zh="金星" data-en="Venus">Venus</button>
+                    <button class="preset-btn" onclick="setPreset(5.20336301,0.04839266,1.30530,100.55615,14.75385,85.19,this,2461000.5)" data-zh="木星" data-en="Jupiter">Jupiter</button>
+                    <button class="preset-btn" onclick="setPreset(39.48168677,0.24880766,17.14175,110.30347,113.76329,52.07,this,2461000.5)" data-zh="冥王星" data-en="Pluto">Pluto</button>
+                    <button class="preset-btn" id="btn-ceres" onclick="setPreset(2.76916515,0.07687242,10.58888,80.30553,73.59769,299.79,this,2461000.5)" data-zh="穀神星（1 Ceres）" data-en="Ceres (1 Ceres)">Ceres (1 Ceres)</button>
+                    <button class="preset-btn" onclick="setPreset(1.2714, 0.8899, 22.26, 265.22, 322.19, 334.02, this, 2460200.5)" data-zh="法厄同（3200 Phaethon）" data-en="Phaethon (3200)">Phaethon (3200)</button>
+                    <button class="preset-btn" onclick="setPreset(0.93454422,0.19794097,3.35286,203.59612,125.21879,294.27,this,2461000.5)" data-zh="阿波菲斯（99942 Apophis）" data-en="Apophis (99942)">Apophis (99942)</button>
+                    <button class="preset-btn" onclick="setPreset(1.12636220,0.20375139,6.03494,2.06087,66.22307,205.32,this,2461000.5)" data-zh="貝努小行星（101955 Bennu）" data-en="Bennu (101955)">Bennu (101955)</button>
+                    <button class="preset-btn" onclick="setPreset(17.83414508,0.96714291,162.26269,58.42008,111.33249,190.19,this,2461000.5)" data-zh="哈雷彗星 1P/Halley）" data-en="Halley's Comet (1P)">Halley's Comet (1P)</button>
+                    <button class="preset-btn" onclick="setPreset(2.21449314,0.84833156,11.78308,334.56582,186.54970,230.53,this,2461000.5)" data-zh="恩克彗星（2P/Encke）" data-en="Encke Comet (2P)">Encke Comet (2P)</button>
+                </div>
+
+                <!-- Epoch 輸入列 -->
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; padding:5px 6px; background:#f0f4ff; border-radius:5px; border:1px solid #c7d7f5;">
+                    <span id="lbl-epoch" style="font-size:0.78rem; font-weight:bold; color:#444; white-space:nowrap;">Orbital Epoch:</span>
+                    <input type="date" id="param-epoch-date" value="2025-11-21"
+                        style="font-size:0.78rem; padding:2px 5px; border:1px solid #aac; border-radius:4px; font-family:inherit; flex:1; min-width:0;">
+                    <span style="font-size:0.75rem; color:#666; white-space:nowrap;">JD <span id="epoch-jd-val" class="val" style="font-size:0.75rem;">2461000.5</span></span>
+                </div>
+
+                <!-- 六個參數：slider + 文字輸入框 -->
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px 14px;">
+
+                    <div class="param-row">
+                        <div style="display:flex; justify-content:space-between; align-items:baseline;">
+                            <span class="param-label">a <span id="lbl-param-a" style="font-weight:normal;color:#888;">(Semi-major axis AU)</span></span>
+                            <input type="number" id="num-a" class="param-numbox" step="any" value="2.7691652">
+                        </div>
+                        <input type="range" id="param-a" min="0.1" max="50" step="0.0000001" value="2.76916515">
+                    </div>
+
+                    <div class="param-row">
+                        <div style="display:flex; justify-content:space-between; align-items:baseline;">
+                            <span class="param-label">e <span id="lbl-param-e" style="font-weight:normal;color:#888;">(Eccentricity)</span></span>
+                            <input type="number" id="num-e" class="param-numbox" step="any" value="0.0768724">
+                        </div>
+                        <input type="range" id="param-e" min="0" max="0.9999" step="0.0000001" value="0.07687242">
+                    </div>
+
+                    <div class="param-row">
+                        <div style="display:flex; justify-content:space-between; align-items:baseline;">
+                            <span class="param-label">i <span id="lbl-param-i" style="font-weight:normal;color:#888;">(Inclination °)</span></span>
+                            <input type="number" id="num-i" class="param-numbox" step="any" value="10.5888800">
+                        </div>
+                        <input type="range" id="param-i" min="0" max="180" step="0.0000001" value="10.58888">
+                    </div>
+
+                    <div class="param-row">
+                        <div style="display:flex; justify-content:space-between; align-items:baseline;">
+                            <span class="param-label">Ω <span id="lbl-param-om" style="font-weight:normal;color:#888;">(Long. Ascending Node °)</span></span>
+                            <input type="number" id="num-om" class="param-numbox" step="any" value="80.3055300">
+                        </div>
+                        <input type="range" id="param-om" min="0" max="360" step="0.0000001" value="80.30553">
+                    </div>
+
+                    <div class="param-row">
+                        <div style="display:flex; justify-content:space-between; align-items:baseline;">
+                            <span class="param-label">ω <span id="lbl-param-w" style="font-weight:normal;color:#888;">(Arg. of Perihelion °)</span></span>
+                            <input type="number" id="num-w" class="param-numbox" step="any" value="73.5976900">
+                        </div>
+                        <input type="range" id="param-w" min="0" max="360" step="0.0000001" value="73.59769">
+                    </div>
+
+                    <div class="param-row">
+                        <div style="display:flex; justify-content:space-between; align-items:baseline;">
+                            <span class="param-label">M₀ <span id="lbl-param-m0" style="font-weight:normal;color:#888;">(Mean Anomaly °)</span></span>
+                            <input type="number" id="num-m0" class="param-numbox" step="any" value="299.7900000">
+                        </div>
+                        <input type="range" id="param-m0" min="0" max="360" step="0.0000001" value="299.79">
+                    </div>
+
+                </div>
+                <!-- 即時軌道資訊面板 -->
+                 <div style="margin-top:8px; border-top:1px solid #b8d0ee; padding-top:7px;">
+                    <div id="orbit-info-title" style="font-size:0.75rem; font-weight:bold; color:#2563eb; margin-bottom:6px;">📊 即時軌道資訊</div>
+                    <div class="orbit-info-row">
+                        <table style="width:100%; font-size:0.75rem; text-align:center; table-layout: fixed;">
+                            <tr>
+                                <th class="orbit-info-label" style="cursor:help;" data-tt="period">公轉週期 T</th>
+                                <th class="orbit-info-label" style="cursor:help;" data-tt="velocity">軌道速度 v</th>
+                                <th class="orbit-info-label" style="cursor:help;" data-tt="rsun">距太陽 r</th>
+                                <th class="orbit-info-label" style="cursor:help;" data-tt="rearth">距地球</th>
+                                <th class="orbit-info-label" style="cursor:help;" data-tt="kinetic">動能 Ek</th>
+                                <th class="orbit-info-label" style="cursor:help;" data-tt="potential">位能 Ep</th>
+                                <th class="orbit-info-label" style="cursor:help;" data-tt="total">總能量 E</th>
+                            </tr>
+                            <tr>
+                                <td id="info-period" style="font-weight:bold;color:#1d4ed8;font-family:monospace;">—</td>
+                                <td id="info-v"      style="font-weight:bold;color:#1d4ed8;font-family:monospace;">—</td>
+                                <td id="info-r-sun"  style="font-weight:bold;color:#1d4ed8;font-family:monospace;">—</td>
+                                <td id="info-r-earth" style="font-weight:bold;color:#1d4ed8;font-family:monospace;">—</td>
+                                <td id="info-ek"     style="font-weight:bold;color:#1d4ed8;font-family:monospace;">—</td>
+                                <td id="info-ep"     style="font-weight:bold;color:#15803d;font-family:monospace;">—</td>
+                                <td id="info-etotal" style="font-weight:bold;color:#7e22ce;font-family:monospace;">—</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 欄位 2-1 -->
+            <div class="control-group bg-white p-3 rounded shadow-sm border border-gray-200">
+                <label class="!mt-0 !text-sm !font-bold text-gray-800"><span id="lbl-curr-date">📅 Current Date:</span></label>
+                <input type="date" id="param-date" value="1979-12-30">
+                
+                <label><span id="lbl-speed">Auto Speed:</span> <span id="speed-val" class="val">1.00</span>x</label>
+                <input type="range" id="param-speed" min="0" max="200" step="1" value="50">
+                
+                <div class="btn-group">
+                    <button id="btn-play-backward" class="action-btn" data-zh="倒轉" data-en="Reverse">Reverse</button>
+                    <button id="btn-pause" class="action-btn" data-zh="暫停" data-en="Pause">Pause</button>
+                    <button id="btn-play-forward" class="action-btn active" data-zh="播放" data-en="Play">Play</button>
+                </div>
+                <div class="btn-group">
+                    <button id="btn-reset" class="action-btn" data-zh="初始時間(1979)" data-en="Reset (1979)">Reset (1979)</button>
+                    <button id="btn-today" class="action-btn bg-green-100" data-zh="今天日期" data-en="Today">Today</button>
+                </div>
+<div style="margin-top:8px; border-top:1px solid #b8d0ee; padding-top:7px;">
+                <!-- 每個 label: 文字靠左，checkbox 靠右 -->
+                <label style="display:flex; justify-content:space-between; align-items:center; margin-top:0;" class="!text-sm !font-bold cursor-pointer text-gray-800 hover:text-blue-600 transition-colors">
+                    <span>🌞 <span id="lbl-lighting">Real Sunlight</span></span>
+                    <input type="checkbox" id="toggle-lighting" class="ml-2 w-4 h-4" style="flex-shrink:0;">
+                </label>
+                <label style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;" class="!text-sm !font-bold cursor-pointer text-gray-800 hover:text-blue-600 transition-colors">
+                    <span>🌕 <span id="lbl-moon">Show Moon System</span></span>
+                    <input type="checkbox" id="toggle-moon" class="ml-2 w-4 h-4" style="flex-shrink:0;">
+                </label>
+                <label style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;" class="!text-sm !font-bold cursor-pointer text-gray-800 hover:text-blue-600 transition-colors">
+                    <span>🪐 <span id="lbl-geo-orbit">Show Orbit on Celestial Sphere</span></span>
+                    <input type="checkbox" id="toggle-geo-orbit" class="ml-2 w-4 h-4" style="flex-shrink:0;">
+                </label>
+                <!-- ☄️ Trail row: 文字 | slider + 天數 | checkbox，全部同一行 -->
+                <div style="display:flex; align-items:center; gap:6px; margin-top:6px;">
+                    <span class="text-sm font-bold text-gray-800" style="white-space:nowrap; flex-shrink:0;">☄️ <span id="lbl-geo-trail">Show Past Trail on Celestial Sphere</span></span>
+                    <div style="display:flex; align-items:center; gap:4px; flex:1; min-width:0;">
+                        <input type="range" id="param-trail-days" min="5" max="100" step="1" value="30" style="flex:1; min-width:0;">
+                        <span style="font-size:0.75rem; white-space:nowrap; color:#666;"><span id="trail-days-val" class="val">30</span> <span id="lbl-days-unit">days</span></span>
+                    </div>
+                    <input type="checkbox" id="toggle-geo-trail" checked class="w-4 h-4" style="flex-shrink:0;">
+                </div>
+            </div>
+</div>
+
+            <!-- 欄位 4: MPCORB 軌道元素解析 + MPC 觀測報告 -->
+            <div class="control-group bg-yellow-50 p-3 rounded shadow-sm border border-yellow-200" style="display:flex;flex-direction:column;gap:0;">
+                <!-- MPCORB 解析 -->
+                <div>
+                    <label class="!mt-0 !text-sm !font-bold text-gray-800"><span id="lbl-mpcorb-title">🔭 MPCORB Orbital Elements Parser:</span></label>
+                    <div style="font-size:0.7rem; color:#6b7280; margin-top:2px; line-height:1.5;">
+                        <span id="lbl-data-source">Data source:</span>
+                        <a href="https://www.minorplanetcenter.net/iau/MPCORB.html" target="_blank"
+                           style="color:#d97706; font-weight:bold; text-decoration:underline;">MPC MPCORB Database</a>
+                        <br><span id="lbl-mpcorb-hint">Find all objects in 80-column format in MPCORB.DAT</span>
+                    </div>
+                    <textarea id="mpcorb-input" rows="3" style="width:100%;font-family:monospace;font-size:0.68rem;resize:vertical;border:1px solid #ccc;border-radius:4px;padding:4px 6px;box-sizing:border-box;background:#fffdf7;margin-top:4px;" id="mpcorb-placeholder-el" placeholder="Paste one line of MPCORB 80-column format, e.g.:&#10;00001   3.34  0.12 K25W10 299.7906  73.6002  80.3042  10.5884 0.0768919 0.21413419   2.7693417  0 MPO780935  7072 116 1802-2024 0.66 M-v 3Ek Pan     0000      (1) Ceres"></textarea>
+                    <div class="btn-group mt-1">
+                        <button onclick="parseMPCORB()" class="action-btn bg-orange-100" id="btn-parse-mpcorb" data-zh="解析並載入軌道" data-en="Parse & Load Orbit">Parse & Load Orbit</button>
+                        <button onclick="document.getElementById('mpcorb-input').value='';document.getElementById('mpcorb-status').textContent=''" class="action-btn" id="btn-clear-mpcorb" data-zh="清除" data-en="Clear">Clear</button>
+                    </div>
+                    <div id="mpcorb-status" style="font-size:0.72rem;color:#666;margin-top:3px;min-height:1.5em;line-height:1.4;"></div>
+                </div>
+                <!-- 分隔線 -->
+                <div style="border-top:1px solid #fcd34d;margin:8px 0;"></div>
+                <!-- MPC 觀測報告 -->
+                <div>
+                    <label class="!mt-0 !text-sm !font-bold text-gray-800"><span id="lbl-mpc-title">📋 MPC Observation Report Markers:</span></label>
+                    <div style="font-size:0.7rem; color:#6b7280; margin-top:2px; line-height:1.5;">
+                        <span id="lbl-mpc-source">Data source:</span>
+                        <a href="https://www.minorplanetcenter.net/db_search" target="_blank"
+                           style="color:#b45309; font-weight:bold; text-decoration:underline;">MPC Database</a>
+                        <br><span id="lbl-mpc-hint">Search for an object, copy & paste observation data from the download section</span>
+                    </div>
+                    <textarea id="mpc-input" rows="3" style="width:100%;font-family:monospace;font-size:0.68rem;resize:vertical;border:1px solid #ccc;border-radius:4px;padding:4px 6px;box-sizing:border-box;background:#fdfdfd;margin-top:4px;" placeholder="Paste MPC 80-column observation report, one record per line...&#10;e.g.:&#10;00001K25A01F  C2025 01 15.12345 03 14 35.6 +05 22 11 14.5 R J01 EXAMPLE"></textarea>
+                    <div class="btn-group mt-1">
+                        <button onclick="parseMPCReport()" class="action-btn bg-yellow-100" id="btn-parse-mpc" data-zh="解析並標示" data-en="Parse & Mark">Parse & Mark</button>
+                        <button onclick="clearMPCMarkers()" class="action-btn" id="btn-clear-mpc" data-zh="清除標示" data-en="Clear Markers">Clear Markers</button>
+                    </div>
+                    <div id="mpc-status" style="font-size:0.72rem;color:#666;margin-top:3px;min-height:1.2em;">No report loaded</div>
+                    <div id="mpc-legend" style="display:none;margin-top:4px;font-size:0.72rem;max-height:60px;overflow-y:auto;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 全域 Tooltip 浮動框 -->
+    <div id="formula-tooltip" class="formula-tooltip"></div>
+
+    <script>
+        const DEG2RAD = Math.PI / 180;
+        const OBLIQUITY = 23.44 * DEG2RAD; 
+        const X_AXIS = new THREE.Vector3(1, 0, 0);
+        const J2000_JD = 2451545.0; 
+        const GAUSSIAN_K = 0.01720209895; 
+        const START_JD = 2444237.5; 
+
+        // 地球軌道參數 (JPL DE441, J2000 黃道, Epoch = J2000.0 = JD 2451545.0)
+        // 來源: Standish et al. / JPL Planetary Fact Sheet
+        const earthParams = {
+            a:   1.00000018,   // 半長軸 a (AU)
+            e:   0.01673163,   // 離心率 e
+            i:   0.00000,      // 軌道傾角 i (°)
+            om: -11.26064,     // 升交點黃經 Ω (°)
+            w:   102.94719,    // 近日點幅角 ω (°)
+            m0:  357.51716,    // 平近點角 M₀ (°) @ J2000.0
+            epoch: J2000_JD    // 曆元 JD
+        };
+
+
+        // 曆元 Epoch 2025-Nov-21.0 = JD 2461000.5 (MPC 標準曆元 K25W10)
+        const MPC_EPOCH_JD = 2461000.5;
+
+        const state = {
+            // 穀神星 (1 Ceres) 軌道參數，Epoch 2025-Nov-21.0 (JPL DE441/SBDB, J2000 黃道)
+            // a=半長軸, e=離心率, i=傾角, om=升交點黃經Ω, w=近日點幅角ω, m0=平近點角M₀
+            a: 2.76916515, e: 0.07687242, i: 10.58888, om: 80.30553, w: 73.59769, m0: 299.79,
+            epoch: MPC_EPOCH_JD, // 軌道元素的曆元 JD
+            showMoon: false,
+            realisticLighting: false,
+            showGeoOrbit: false,
+            showGeoTrail: true,
+            trailDays: 30,
+            moon: {
+                // 僅 i (傾角滑桿控制) 與 visualScale (日心圖放大倍率) 有作用
+                // 月球位置由 getMoonPosLocal() 攝動級數計算，不使用克卜勒元素
+                i: 5.14,       // 月球軌道傾角 (°)，可由 UI 調整
+                visualScale: 100  // 日心圖中月球軌道放大倍率
+            },
+            jd: START_JD,
+            speed: 1.0, playDirection: 1 
+        };
+
+        const helioEl = document.getElementById('heliocentric');
+        const geoEl = document.getElementById('geocentric');
+
+        const scenes = {
+            helio: { scene: new THREE.Scene(), camera: null, renderer: null, controls: null },
+            geo: { scene: new THREE.Scene(), camera: null, renderer: null, controls: null }
+        };
+
+        function initScene(container, type) {
+            const scene = scenes[type].scene;
+            scene.background = new THREE.Color(0xffffff);
+            const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
+            const renderer = new THREE.WebGLRenderer({ antialias: true });
+            container.appendChild(renderer.domElement);
+            const controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+
+            if (type === 'helio') camera.position.set(8, 8, 12);
+            else camera.position.set(20, 15, 20);
+
+            scenes[type].camera = camera;
+            scenes[type].renderer = renderer;
+            scenes[type].controls = controls;
+
+            // 光源設置
+            const ambientLight = new THREE.AmbientLight(0x888888);
+            scene.add(ambientLight);
+            
+            const staticLight = new THREE.DirectionalLight(0xffffff, 1.2);
+            staticLight.position.set(10, 20, 15);
+            scene.add(staticLight);
+
+            // 動態太陽光源 (用於真實光影模式)
+            let dynamicLight, dynamicLightAst;
+            if (type === 'helio') {
+                dynamicLight = new THREE.PointLight(0xffffff, 0, 0); // 預設亮度為 0
+                dynamicLight.position.set(0, 0, 0);
+                scene.add(dynamicLight);
+                scenes[type].lights = { ambient: ambientLight, static: staticLight, dynamic: dynamicLight };
+                
+                ambientLight.layers.enableAll(); // 環境光作用於所有 Layer
+                staticLight.layers.enableAll();  // 靜態全局光作用於所有 Layer
+            } else {
+                // --- Geocentric Specific Lighting ---
+                // 關閉 Layer 2，讓全局光源不影響地球
+                ambientLight.layers.disableAll();
+                ambientLight.layers.enable(0);
+                ambientLight.layers.enable(1);
+
+                staticLight.layers.disableAll();
+                staticLight.layers.enable(0);
+                staticLight.layers.enable(1);
+
+                // Earth 專屬受光 (Layer 2) - 永遠依據天球太陽位置照亮半球
+                const earthAmbient = new THREE.AmbientLight(0x222222); 
+                earthAmbient.layers.disableAll();
+                earthAmbient.layers.enable(2);
+                scene.add(earthAmbient);
+
+                const earthSunLight = new THREE.DirectionalLight(0xffffff, 2.0);
+                earthSunLight.layers.disableAll();
+                earthSunLight.layers.enable(2);
+                scene.add(earthSunLight);
+                scene.add(earthSunLight.target);
+
+                // 月球與其他天體受光 (Layer 0) - 必須使用「平行光(DirectionalLight)」！
+                dynamicLight = new THREE.DirectionalLight(0xffffff, 0); // 預設亮度為 0
+                dynamicLight.layers.disableAll(); // 嚴格重置圖層
+                dynamicLight.layers.enable(0);
+                scene.add(dynamicLight);
+                scene.add(dynamicLight.target); // 將目標點加入場景確保矩陣更新
+                
+                // 小行星獨立受光 (Layer 1)
+                dynamicLightAst = new THREE.DirectionalLight(0xffffff, 0); // 預設亮度為 0
+                dynamicLightAst.layers.disableAll(); // 嚴格重置圖層
+                dynamicLightAst.layers.enable(1);
+                scene.add(dynamicLightAst);
+                scene.add(dynamicLightAst.target); // 將目標點加入場景確保矩陣更新
+                
+                scenes[type].lights = { 
+                    ambient: ambientLight, 
+                    static: staticLight, 
+                    dynamic: dynamicLight, 
+                    dynamicAst: dynamicLightAst,
+                    earthSun: earthSunLight
+                };
+                
+                camera.layers.enable(1); // 讓相機也能看到 Layer 1 的小行星
+                camera.layers.enable(2); // 讓相機看見 Layer 2 的地球
+            }
+        }
+
+        initScene(helioEl, 'helio');
+        initScene(geoEl, 'geo');
+
+        const objects = {
+            sun: null, earth: null, earthOrbit: null, asteroid: null, asteroidOrbit: null,
+            geoEarth: null, geoSun: null, geoAsteroid: null, geoAsteroidOrbitFull: null, 
+            geoAsteroidOrbit30Day: null, geoEcliptic: null,
+            earthAxisHelio: null, earthAxisGeo: null,
+            helioMoon: null, helioMoonOrbit: null, geoMoon: null, geoMoonOrbit: null
+        };
+
+        // 產生一個五角星形狀的材質，用來標示天球北極
+        function createStarTexture(color) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 64;
+            canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            for (let i = 0; i < 5; i++) {
+                // 外頂點
+                ctx.lineTo(32 + 30 * Math.cos((18 + i * 72) * Math.PI / 180), 32 - 30 * Math.sin((18 + i * 72) * Math.PI / 180));
+                // 內凹點
+                ctx.lineTo(32 + 12 * Math.cos((54 + i * 72) * Math.PI / 180), 32 - 12 * Math.sin((54 + i * 72) * Math.PI / 180));
+            }
+            ctx.closePath();
+            ctx.fill();
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        function createObjects() {
+            // --- Helio Scene ---
+            // 將太陽改為 MeshBasicMaterial，它本身就是光源，不受陰影影響，永遠明亮 (顏色改為 #E6B800)
+            objects.sun = new THREE.Mesh(new THREE.SphereGeometry(0.3, 32, 32), new THREE.MeshBasicMaterial({ color: 0xe6b800 }));
+            scenes.helio.scene.add(objects.sun);
+
+            // 地球顏色改為 #005BBB
+            objects.earth = new THREE.Mesh(new THREE.SphereGeometry(0.15, 32, 32), new THREE.MeshStandardMaterial({ color: 0x005bbb, roughness: 1, metalness: 0 }));
+            scenes.helio.scene.add(objects.earth);
+
+            // 加入月球到日心圖 (掛載在地球上)
+            objects.helioMoon = new THREE.Mesh(new THREE.SphereGeometry(0.05, 16, 16), new THREE.MeshStandardMaterial({ color: 0x888888 }));
+            objects.helioMoonOrbit = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0x888888, transparent: true, opacity: 0.6 }));
+            objects.earth.add(objects.helioMoon);
+            objects.earth.add(objects.helioMoonOrbit);
+
+            const axisLengthHelio = 0.4;
+            const axisDirHelio = new THREE.Vector3(0, Math.cos(OBLIQUITY), -Math.sin(OBLIQUITY)).normalize();
+            objects.earthAxisHelio = new THREE.Line(new THREE.BufferGeometry().setFromPoints([
+                axisDirHelio.clone().multiplyScalar(axisLengthHelio),
+                axisDirHelio.clone().multiplyScalar(-axisLengthHelio)
+            ]), new THREE.LineBasicMaterial({ color: 0x00ffff, linewidth: 2 }));
+            objects.earth.add(objects.earthAxisHelio);
+
+            // 繪製地球真實軌道
+            const earthOrbitPoints = [];
+            for(let i=0; i<=150; i++) {
+                const jd_orbit = J2000_JD + (i/150) * 365.256;
+                earthOrbitPoints.push(getPos(earthParams.a, earthParams.e, earthParams.i, earthParams.om, earthParams.w, earthParams.m0, jd_orbit, earthParams.epoch));
+            }
+            objects.earthOrbit = new THREE.Line(new THREE.BufferGeometry().setFromPoints(earthOrbitPoints), new THREE.LineBasicMaterial({ color: 0xcccccc }));
+            scenes.helio.scene.add(objects.earthOrbit);
+
+            // 小行星與其軌道顏色改為紫色 #9467BD
+            objects.asteroid = new THREE.Mesh(new THREE.SphereGeometry(0.12, 24, 24), new THREE.MeshStandardMaterial({ color: 0x9467bd }));
+            scenes.helio.scene.add(objects.asteroid);
+            objects.asteroidOrbit = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0x9467bd, transparent: true, opacity: 0.6 }));
+            scenes.helio.scene.add(objects.asteroidOrbit);
+            scenes.helio.scene.add(new THREE.GridHelper(80, 80, 0xe0e0e0, 0xf0f0f0));
+
+            // --- Geo Scene ---
+            // 右側地心圖的地球顏色改為 #005BBB，半徑增加一倍 (0.4 -> 0.8)
+            objects.geoEarth = new THREE.Mesh(new THREE.SphereGeometry(0.8, 32, 32), new THREE.MeshStandardMaterial({ color: 0x005bbb, roughness: 1, metalness: 0 }));
+            // 初始受光圖層現在將由 updateGraphics() 統一根據狀態切換
+            scenes.geo.scene.add(objects.geoEarth);
+
+            objects.earthAxisGeo = new THREE.Line(new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(0, 1.0, 0), new THREE.Vector3(0, -1.0, 0)
+            ]), new THREE.LineBasicMaterial({ color: 0x00ffff, linewidth: 2 }));
+            scenes.geo.scene.add(objects.earthAxisGeo);
+
+            // 加入月球到地心天球圖
+            objects.geoMoon = new THREE.Mesh(new THREE.SphereGeometry(0.25, 24, 24), new THREE.MeshStandardMaterial({color: 0xaaaaaa}));
+            objects.geoMoon.layers.disableAll(); // 嚴格綁定受光圖層
+            objects.geoMoon.layers.enable(0);
+            scenes.geo.scene.add(objects.geoMoon);
+            objects.geoMoonOrbit = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({color: 0xaaaaaa, transparent: true, opacity: 0.5}));
+            scenes.geo.scene.add(objects.geoMoonOrbit);
+
+            const gridGroup = new THREE.Group();
+            const gridMat = new THREE.LineBasicMaterial({ color: 0xdddddd, transparent: true, opacity: 0.6 });
+            for (let lat = -60; lat <= 60; lat += 30) {
+                const points = [];
+                const radius = 10 * Math.cos(lat * DEG2RAD);
+                const y = 10 * Math.sin(lat * DEG2RAD);
+                for (let lon = 0; lon <= 64; lon++) points.push(new THREE.Vector3(Math.cos(lon/64*Math.PI*2)*radius, y, Math.sin(lon/64*Math.PI*2)*radius));
+                gridGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), gridMat));
+            }
+            for (let lon = 0; lon < 360; lon += 30) {
+                const points = [];
+                for (let lat = -90; lat <= 90; lat += 5) {
+                    const r_lat = lat * DEG2RAD, r_lon = lon * DEG2RAD;
+                    points.push(new THREE.Vector3(Math.cos(r_lon)*10*Math.cos(r_lat), 10*Math.sin(r_lat), Math.sin(r_lon)*10*Math.cos(r_lat)));
+                }
+                // 特別將赤經 0 度 (lon === 0) 的線設為較深的灰色
+                const lineMat = (lon === 0) ? new THREE.LineBasicMaterial({ color: 0x666666, linewidth: 2, transparent: true, opacity: 0.8 }) : gridMat;
+                gridGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), lineMat));
+            }
+            scenes.geo.scene.add(gridGroup);
+
+            const eclPoints = [];
+            for(let i=0; i<=120; i++) {
+                let p = new THREE.Vector3(Math.cos(i/120*Math.PI*2)*10, 0, Math.sin(i/120*Math.PI*2)*10);
+                eclPoints.push(p.applyAxisAngle(X_AXIS, OBLIQUITY));
+            }
+            objects.geoEcliptic = new THREE.Line(new THREE.BufferGeometry().setFromPoints(eclPoints), new THREE.LineBasicMaterial({color: 0xffaa00, linewidth: 2, transparent:true, opacity:0.7}));
+            scenes.geo.scene.add(objects.geoEcliptic);
+
+            // 增加深灰色天球赤道線
+            const eqPoints = [];
+            for(let i=0; i<=120; i++) {
+                eqPoints.push(new THREE.Vector3(Math.cos(i/120*Math.PI*2)*10, 0, Math.sin(i/120*Math.PI*2)*10));
+            }
+            const geoEquator = new THREE.Line(new THREE.BufferGeometry().setFromPoints(eqPoints), new THREE.LineBasicMaterial({color: 0x666666, linewidth: 2, transparent:true, opacity:0.8}));
+            scenes.geo.scene.add(geoEquator);
+
+            // 增加灰色星星代表天球北極
+            const ncpSpriteMat = new THREE.SpriteMaterial({ map: createStarTexture('#888888'), sizeAttenuation: false });
+            const ncpSprite = new THREE.Sprite(ncpSpriteMat);
+            ncpSprite.position.set(0, 10, 0); // 放在北極頂點 (Y軸上方10的距離)
+            ncpSprite.scale.set(0.04, 0.04, 1); // 固定在畫面上的比例大小
+            scenes.geo.scene.add(ncpSprite);
+
+            // 右側太陽同樣改為恆亮 (顏色更新為 #E6B800)
+            objects.geoSun = new THREE.Mesh(new THREE.SphereGeometry(0.5, 24, 24), new THREE.MeshBasicMaterial({color: 0xe6b800}));
+            scenes.geo.scene.add(objects.geoSun);
+
+            // 右側小行星與軌道顏色同步改為紫色 #9467BD
+            objects.geoAsteroid = new THREE.Mesh(new THREE.SphereGeometry(0.35, 24, 24), new THREE.MeshStandardMaterial({color: 0x9467bd}));
+            objects.geoAsteroid.layers.disableAll();
+            objects.geoAsteroid.layers.enable(1); // 移至 Layer 1 以便接受獨立角度的光源計算
+            scenes.geo.scene.add(objects.geoAsteroid);
+
+            objects.geoAsteroidOrbitFull = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({color: 0x9467bd, transparent: true, opacity: 0.4}));
+            scenes.geo.scene.add(objects.geoAsteroidOrbitFull);
+
+            objects.geoAsteroidOrbit30Day = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({color: 0x9467bd, linewidth: 3}));
+            scenes.geo.scene.add(objects.geoAsteroidOrbit30Day);
+        }
+
+        createObjects();
+
+        function solveKepler(M, e) {
+            // 將 M 正規化到 -π 到 π 之間
+            M = M % (2 * Math.PI);
+            if (M > Math.PI) M -= 2 * Math.PI;
+            else if (M < -Math.PI) M += 2 * Math.PI;
+
+            // 提供更精準的初始猜測值，大幅提升高離心率時的穩定性
+            let E = M + e * Math.sin(M) * (1.0 + e * Math.cos(M));
+            
+            let delta = 1;
+            let iter = 0;
+            const maxIter = 100;
+            
+            // 改用更穩定的 Halley's Method (哈雷法) 來取代牛頓法
+            while (Math.abs(delta) > 1e-7 && iter < maxIter) {
+                let fE = E - e * Math.sin(E) - M;
+                let fPrimeE = 1 - e * Math.cos(E);
+                let fDoublePrimeE = e * Math.sin(E);
+                
+                delta = fE / (fPrimeE - 0.5 * fE * fDoublePrimeE / fPrimeE);
+                
+                // 加上步長限制，防止在離心率極端(如0.99)時發生數值爆炸
+                if (delta > 1.0) delta = 1.0;
+                else if (delta < -1.0) delta = -1.0;
+                
+                E -= delta;
+                iter++;
+            }
+            return E;
+        }
+
+        // 將位置計算拆分為兩個步驟，方便直接透過角度(E)畫出完美幾何軌道
+        function getPosFromE(a, e, i_deg, om_deg, w_deg, E) {
+            const x_peri = a * (Math.cos(E) - e);
+            const y_peri = a * Math.sqrt(1 - e * e) * Math.sin(E);
+            
+            const i = i_deg * DEG2RAD, om = om_deg * DEG2RAD, w = w_deg * DEG2RAD;
+            const cos_om = Math.cos(om), sin_om = Math.sin(om);
+            const cos_i = Math.cos(i), sin_i = Math.sin(i);
+            const cos_w = Math.cos(w), sin_w = Math.sin(w);
+            
+            const x_ecl = x_peri * (cos_om * cos_w - sin_om * sin_w * cos_i) + y_peri * (-cos_om * sin_w - sin_om * cos_w * cos_i);
+            const y_ecl = x_peri * (sin_om * cos_w + cos_om * sin_w * cos_i) + y_peri * (-sin_om * sin_w + cos_om * cos_w * cos_i);
+            const z_ecl = x_peri * (sin_w * sin_i) + y_peri * (cos_w * sin_i);
+            
+            return new THREE.Vector3(x_ecl, z_ecl, -y_ecl);
+        }
+
+        // 通用的克卜勒位置計算函數，支援任意曆元 epoch_jd
+        // m0_deg: 在 epoch_jd 時刻的平近點角 (度)
+        function getPos(a, e, i_deg, om_deg, w_deg, m0_deg, jd, epoch_jd) {
+            const t0 = (epoch_jd !== undefined) ? epoch_jd : J2000_JD;
+            const d = jd - t0;
+            const n = GAUSSIAN_K / Math.sqrt(a * a * a); // 平均運動 (rad/day)
+            const M = (m0_deg * DEG2RAD + n * d) % (2 * Math.PI);
+            const E = solveKepler(M, e);
+            
+            return getPosFromE(a, e, i_deg, om_deg, w_deg, E);
+        }
+
+        function getMoonPosLocal(jd) {
+            // 計算自 J2000 起的儒略世紀數
+            const T = (jd - 2451545.0) / 36525.0;
+            
+            // 計算月球的5大基本參數 (角度)
+            const L0 = (218.316 + 481267.881 * T) % 360; // 月球平黃經
+            const D = (297.850 + 445267.111 * T) % 360;  // 日月平均距角
+            const M = (134.963 + 477198.867 * T) % 360;  // 月球平近點角
+            const Mp = (357.529 + 35999.050 * T) % 360;  // 太陽平近點角
+            const F = (93.272 + 483202.017 * T) % 360;   // 月球黃緯幅角
+
+            const D_r = D * DEG2RAD, M_r = M * DEG2RAD, Mp_r = Mp * DEG2RAD, F_r = F * DEG2RAD;
+
+            // 黃經攝動修正 (包含中心差、出差、二均差、週年差等，單位: 度)
+            const delta_L = 
+                6.289 * Math.sin(M_r) +                     // 中心差 (橢圓基本效應)
+                1.274 * Math.sin(2*D_r - M_r) +             // 出差 (Evection)
+                0.658 * Math.sin(2*D_r) +                   // 二均差 (Variation)
+                0.214 * Math.sin(2*M_r) +                   
+                -0.186 * Math.sin(Mp_r) +                   // 週年差 (Annual equation)
+                -0.114 * Math.sin(2*F_r) +
+                -0.059 * Math.sin(2*M_r - 2*D_r) +
+                -0.057 * Math.sin(M_r - 2*D_r + Mp_r) +
+                0.053 * Math.sin(M_r + 2*D_r);
+                
+            const L_true = L0 + delta_L;
+
+            // 黃緯攝動修正 (單位: 度)
+            let B_true = 
+                5.128 * Math.sin(F_r) +
+                0.280 * Math.sin(M_r + F_r) +
+                0.277 * Math.sin(M_r - F_r) +
+                0.173 * Math.sin(F_r - 2*D_r) +
+                0.055 * Math.sin(M_r + F_r - 2*D_r) +
+                0.046 * Math.sin(F_r - M_r + 2*D_r);
+                
+            // 讓您的 UI 傾角滑桿依然能動態控制 (以真實 5.14 度為基準)
+            B_true = B_true * (state.moon.i / 5.14);
+
+            // 距離攝動修正 (單位: 公里)
+            const dist_km = 385000 +
+                -20905 * Math.cos(M_r) +
+                -3699 * Math.cos(2*D_r - M_r) +
+                -2956 * Math.cos(2*D_r) +
+                -570 * Math.cos(2*M_r);
+                
+            const dist_au = dist_km / 149597870.7;
+
+            const L_rad = L_true * DEG2RAD;
+            const B_rad = B_true * DEG2RAD;
+
+            // 將球座標轉為黃道面直角坐標系
+            const x_ecl = dist_au * Math.cos(B_rad) * Math.cos(L_rad);
+            const y_ecl = dist_au * Math.cos(B_rad) * Math.sin(L_rad);
+            const z_ecl = dist_au * Math.sin(B_rad);
+            
+            return new THREE.Vector3(x_ecl, z_ecl, -y_ecl);
+        }
+
+        function toEquatorial(vec) {
+            return vec.clone().applyAxisAngle(X_AXIS, OBLIQUITY);
+        }
+
+        function updateMoonOrbitGeometry() {
+            if (!state.showMoon) return;
+            const helioPoints = [];
+            const geoPoints = [];
+            for(let j=0; j<=100; j++) {
+                const fraction = j / 100;
+                // 以「當前日期 (state.jd)」為基準畫軌道，這樣就能看見軌道隨時間旋轉(進動)
+                const mJd = state.jd + fraction * 27.321661; 
+                const localPos = getMoonPosLocal(mJd);
+                // Helio View
+                helioPoints.push(localPos.clone().multiplyScalar(state.moon.visualScale));
+                // Geo View - 月球軌道深度固定為 10，貼合天球表面
+                geoPoints.push(toEquatorial(localPos).normalize().multiplyScalar(10));
+            }
+            objects.helioMoonOrbit.geometry.setFromPoints(helioPoints);
+            objects.geoMoonOrbit.geometry.setFromPoints(geoPoints);
+        }
+
+        function updateGraphics() {
+            // Earth：套用真實橢圓參數（傳入曆元 JD）
+            const earthPos = getPos(earthParams.a, earthParams.e, earthParams.i, earthParams.om, earthParams.w, earthParams.m0, state.jd, earthParams.epoch);
+            objects.earth.position.copy(earthPos);
+
+            // Asteroid（傳入曆元 JD）
+            const astPos = getPos(state.a, state.e, state.i, state.om, state.w, state.m0, state.jd, state.epoch);
+            objects.asteroid.position.copy(astPos);
+            
+            // Geocentric Celestial Map Updates
+            // 全部統一貼在半徑為 10 的天球表面上
+            objects.geoSun.position.copy(toEquatorial(earthPos.clone().negate()).normalize().multiplyScalar(10));
+            objects.geoAsteroid.position.copy(toEquatorial(astPos.clone().sub(earthPos)).normalize().multiplyScalar(10));
+
+            // Moon Updates
+            if (state.showMoon) {
+                objects.helioMoon.visible = true;
+                objects.helioMoonOrbit.visible = true;
+                objects.geoMoon.visible = true;
+                objects.geoMoonOrbit.visible = true;
+                
+                const moonLocalPos = getMoonPosLocal(state.jd);
+                objects.helioMoon.position.copy(moonLocalPos.clone().multiplyScalar(state.moon.visualScale));
+                // 月球同樣貼在天球半徑 10 的表面
+                objects.geoMoon.position.copy(toEquatorial(moonLocalPos).normalize().multiplyScalar(10));
+                
+                // 動態更新月球軌道 (因為有進動，軌道形狀會隨時間自轉)
+                updateMoonOrbitGeometry();
+            } else {
+                objects.helioMoon.visible = false;
+                objects.helioMoonOrbit.visible = false;
+                objects.geoMoon.visible = false;
+                objects.geoMoonOrbit.visible = false;
+            }
+
+            // 更新地心圖太陽動態光源位置 (照射地球與月球)
+            scenes.geo.lights.dynamic.position.copy(objects.geoSun.position);
+            
+            // 應用光影與背景模式
+            const isRealistic = state.realisticLighting;
+
+            // 更新地球專屬的太陽光源 (Layer 2)
+            if (scenes.geo.lights.earthSun) {
+                scenes.geo.lights.earthSun.position.copy(objects.geoSun.position);
+                // 明確將此光源關閉，徹底防止任何殘留的日夜光影影響右側地球
+                scenes.geo.lights.earthSun.intensity = isRealistic ? 2.0 : 0;
+                scenes.geo.lights.earthSun.visible = isRealistic;
+            }
+            
+            // 更新小行星專屬的光源方向 (以真實日心向量的反方向，轉為赤道座標)
+            const astToSunHelio = astPos.clone().negate();
+            scenes.geo.lights.dynamicAst.position.copy(toEquatorial(astToSunHelio).normalize().multiplyScalar(10));
+
+            // 動態切換右側地球的受光模式：開啟光影時獨立受光(Layer 2)，關閉時回到一般全局受光(Layer 0)
+            objects.geoEarth.layers.set(isRealistic ? 2 : 0);
+
+            ['helio', 'geo'].forEach(type => {
+                const s = scenes[type];
+                s.scene.background.setHex(0xffffff); // 強制維持白色背景
+                
+                // 未開啟光影時，提高環境光底色
+                s.lights.ambient.color.setHex(isRealistic ? 0x222222 : 0x777777); 
+                
+                // 開啟跟隨相機的「頭燈」(靜態光)：
+                // 這樣能保持天體的3D立體球感，但因為亮面永遠面向觀察者，
+                // 不管天體公轉到哪裡，從畫面看過去都不會有任何光影(相位的明暗)變化。
+                s.lights.static.intensity = isRealistic ? 0 : 1.0;
+                s.lights.static.visible = !isRealistic;
+                if (!isRealistic) {
+                    s.lights.static.position.copy(s.camera.position);
+                }
+                
+                s.lights.dynamic.intensity = isRealistic ? (type === 'helio' ? 2.5 : 2.0) : 0;
+                s.lights.dynamic.visible = isRealistic;
+                
+                if (s.lights.dynamicAst) {
+                    s.lights.dynamicAst.intensity = isRealistic ? 2.0 : 0;
+                    s.lights.dynamicAst.visible = isRealistic;
+                }
+            });
+
+            // Orbits Geometry updates
+            // 改為依照「偏近點角 E」均勻取樣，保證橢圓完美平滑
+            const orbitPoints = [];
+            const geoOrbitPoints = [];
+            for (let j = 0; j <= 200; j++) {
+                const E_sample = (j / 200) * Math.PI * 2;
+                
+                // 直接透過 E_sample 取得幾何位置！
+                // 完全避開克卜勒時間求解，保證就算 e=0.99 軌道線也絕對是完美平滑的橢圓形！
+                const pAst = getPosFromE(state.a, state.e, state.i, state.om, state.w, E_sample);
+                
+                orbitPoints.push(pAst);
+                // 軌道線統一貼在半徑為 10 的天球表面
+                geoOrbitPoints.push(toEquatorial(pAst.clone().sub(earthPos)).normalize().multiplyScalar(10));
+            }
+            objects.asteroidOrbit.geometry.setFromPoints(orbitPoints);
+            objects.geoAsteroidOrbitFull.geometry.setFromPoints(geoOrbitPoints);
+            objects.geoAsteroidOrbitFull.visible = state.showGeoOrbit;
+
+            objects.geoAsteroidOrbit30Day.visible = state.showGeoTrail;
+            if (state.showGeoTrail) {
+                const orbitTrailPoints = [];
+                for (let k = -state.trailDays; k <= 0; k++) {
+                    const pastJD = state.jd + k;
+                    const pAst = getPos(state.a, state.e, state.i, state.om, state.w, state.m0, pastJD, state.epoch);
+                    const pEarth = getPos(earthParams.a, earthParams.e, earthParams.i, earthParams.om, earthParams.w, earthParams.m0, pastJD, earthParams.epoch);
+                    
+                    // 歷史軌跡同樣貼在半徑為 10 的天球表面
+                    orbitTrailPoints.push(toEquatorial(pAst.sub(pEarth)).normalize().multiplyScalar(10));
+                }
+                objects.geoAsteroidOrbit30Day.geometry.setFromPoints(orbitTrailPoints);
+            }
+
+            // ── 即時軌道資訊更新 ─────────────────────────────────────────────
+            updateOrbitInfo(astPos, earthPos);
+        }
+
+        function updateOrbitInfo(astPos, earthPos) {
+            const a = state.a, e = state.e;
+            const K = GAUSSIAN_K; // rad/day, Gaussian
+
+            // 公轉週期 T = 2π/n = 2π * a^1.5 / k  (days)
+            const T_days = 2 * Math.PI * Math.pow(a, 1.5) / K;
+            const T_years = T_days / 365.25;
+
+            // 目前與太陽距離 r = |astPos| (AU)
+            const r_sun = astPos.length(); // Three.js 座標單位 = AU
+
+            // 目前與地球距離
+            const r_earth = astPos.clone().sub(earthPos).length();
+
+            // 軌道速度 v = k * sqrt(2/r - 1/a)  (AU/day)
+            // 轉換為 km/s: 1 AU/day = 149597870.7 km / 86400 s = 1731.457 km/s
+            const AU_per_day_to_km_s = 149597870.7 / 86400.0;
+            const v_au_day = K * Math.sqrt(2.0 / r_sun - 1.0 / a);
+            const v_km_s = v_au_day * AU_per_day_to_km_s;
+
+            // ── 能量計算（以單位質量計，SI 單位 J/kg = m²/s²，再轉 MJ/kg）──
+            // 太陽 GM = 1.327124400e20 m³/s²
+            const GM_SI = 1.327124400e20; // m³/s²
+            const AU_m  = 149597870700;   // 1 AU in metres
+            const r_m   = r_sun * AU_m;   // 天體-太陽距離 (m)
+            const a_m   = a    * AU_m;    // 半長軸 (m)
+            const v_ms  = v_km_s * 1000;  // 速度 (m/s)
+
+            // 動能（每單位質量）：Eₖ = ½v²
+            const Ek_J  = 0.5 * v_ms * v_ms;
+
+            // 位能（每單位質量）：Eₚ = -GM/r
+            const Ep_J  = -GM_SI / r_m;
+
+            // 總機械能（每單位質量）：E = Eₖ + Eₚ = -GM/(2a)
+            const Etotal_J = Ek_J + Ep_J;
+
+            // 轉換為 MJ/kg（百萬焦耳/公斤）
+            const toMJ = 1e-6;
+            const Ek_MJ     = Ek_J    * toMJ;
+            const Ep_MJ     = Ep_J    * toMJ;
+            const Etotal_MJ = Etotal_J * toMJ;
+
+            // 格式化並填入面板
+            const fmt = (x, d) => x.toFixed(d);
+            const fmtE = v => {
+                const abs = Math.abs(v);
+                if (abs >= 1e6) return (v/1e6).toFixed(3) + ' ×10⁶';
+                if (abs >= 1e3) return (v/1e3).toFixed(3) + ' ×10³';
+                return v.toFixed(2);
+            };
+
+            const pEl  = document.getElementById('info-period');
+            const rSEl = document.getElementById('info-r-sun');
+            const rEEl = document.getElementById('info-r-earth');
+            const vEl  = document.getElementById('info-v');
+            const ekEl = document.getElementById('info-ek');
+            const epEl = document.getElementById('info-ep');
+            const etEl = document.getElementById('info-etotal');
+
+            if (T_years >= 100)
+                pEl.textContent  = fmt(T_years, 1) + ' 年';
+            else if (T_years >= 1)
+                pEl.textContent  = fmt(T_years, 3) + ' 年';
+            else
+                pEl.textContent  = fmt(T_days, 2) + ' 天';
+            rSEl.textContent = fmt(r_sun,   4) + ' AU';
+            rEEl.textContent = fmt(r_earth, 4) + ' AU';
+            vEl.textContent  = fmt(v_km_s,  3) + ' km/s';
+            ekEl.textContent = fmtE(Ek_MJ)     + ' MJ/kg';
+            epEl.textContent = fmtE(Ep_MJ)     + ' MJ/kg';
+            etEl.textContent = fmtE(Etotal_MJ) + ' MJ/kg';
+        }
+
+        function setPreset(a, e, i, om, w, m0, btnElement, epoch) {
+            state.a = a; state.e = e; state.i = i; state.om = om; state.w = w; state.m0 = m0;
+            state.epoch = (epoch !== undefined) ? epoch : MPC_EPOCH_JD;
+
+            // 同步 slider + numbox
+            ['a','e','i','om','w','m0'].forEach(key => syncParamUI(key, state[key]));
+
+            // 同步 Epoch 日期欄位
+            const epochDateEl = document.getElementById('param-epoch-date');
+            const epochJdSpan = document.getElementById('epoch-jd-val');
+            if (epochDateEl) epochDateEl.value = jdToDateStr(state.epoch);
+            if (epochJdSpan) epochJdSpan.textContent = state.epoch.toFixed(1);
+
+            // slider a 的 max 動態調整
+            const aSlider = document.getElementById('param-a');
+            if (aSlider) aSlider.max = (a > 5) ? 50 : 50; // 統一 50 AU 上限
+
+            if (btnElement) {
+                document.querySelectorAll('.preset-btn').forEach(btn => btn.classList.remove('active-preset'));
+                btnElement.classList.add('active-preset');
+            }
+            updateGraphics();
+        }
+
+        // ── 精度固定為 7 位小數 ───────────────────────────────────────────────
+        const DECIMAL_PLACES = 7;
+
+        // 各參數的範圍設定
+        const PARAM_CONFIGS = {
+            a:  { min: 0.1,   max: 50     },
+            e:  { min: 0,     max: 0.9999 },
+            i:  { min: 0,     max: 180    },
+            om: { min: 0,     max: 360    },
+            w:  { min: 0,     max: 360    },
+            m0: { min: 0,     max: 360    },
+        };
+
+        function fmtVal(key, v) {
+            return v.toFixed(DECIMAL_PLACES);
+        }
+
+        // 同步更新某個參數的 slider 與 numbox 顯示
+        function syncParamUI(key, val) {
+            const slider = document.getElementById(`param-${key}`);
+            const numbox = document.getElementById(`num-${key}`);
+            const spanEl = document.getElementById(`${key}-val`);
+            if (slider) slider.value = val;
+            if (numbox) { numbox.value = fmtVal(key, val); numbox.classList.remove('invalid'); }
+            if (spanEl) spanEl.innerText = fmtVal(key, val);
+        }
+
+        // ── Epoch 日期輸入 ─────────────────────────────────────────────────────
+        function dateStrToJD(dateStr) {
+            // dateStr 格式: YYYY-MM-DD
+            const d = new Date(dateStr + 'T12:00:00Z'); // 正午 TT ≈ 正午 UTC
+            if (isNaN(d.getTime())) return null;
+            return d.getTime() / 86400000 + 2440587.5;
+        }
+        function jdToDateStr(jd) {
+            const ms = (jd - 2440587.5) * 86400000;
+            return new Date(ms).toISOString().split('T')[0];
+        }
+
+        const epochDateEl = document.getElementById('param-epoch-date');
+        const epochJdSpan = document.getElementById('epoch-jd-val');
+
+        function applyEpochDate(dateStr) {
+            const jd = dateStrToJD(dateStr);
+            if (!jd) return;
+            state.epoch = jd;
+            epochJdSpan.textContent = jd.toFixed(1);
+            updateGraphics();
+        }
+
+        epochDateEl.addEventListener('change', () => applyEpochDate(epochDateEl.value));
+        epochDateEl.addEventListener('blur',   () => applyEpochDate(epochDateEl.value));
+
+        // ── Slider + 數字框 雙向同步監聽 ─────────────────────────────────────
+        ['a','e','i','om','w','m0'].forEach(key => {
+            const slider = document.getElementById(`param-${key}`);
+            const numbox = document.getElementById(`num-${key}`);
+
+            // Slider → numbox + state
+            if (slider) {
+                slider.addEventListener('input', () => {
+                    const v = parseFloat(slider.value);
+                    state[key] = v;
+                    if (numbox) { numbox.value = fmtVal(key, v); numbox.classList.remove('invalid'); }
+                    const spanEl = document.getElementById(`${key}-val`);
+                    if (spanEl) spanEl.innerText = fmtVal(key, v);
+                    document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active-preset'));
+                    updateGraphics();
+                });
+            }
+
+            // 數字框 → slider + state（即時，每次 input）
+            if (numbox) {
+                numbox.addEventListener('input', () => {
+                    const raw = numbox.value.trim();
+                    const v = parseFloat(raw);
+                    const cfg = PARAM_CONFIGS[key];
+                    if (isNaN(v) || v < cfg.min || v > cfg.max) {
+                        numbox.classList.add('invalid');
+                        return; // 不更新，等使用者修正
+                    }
+                    numbox.classList.remove('invalid');
+                    state[key] = v;
+                    if (slider) slider.value = v;
+                    const spanEl = document.getElementById(`${key}-val`);
+                    if (spanEl) spanEl.innerText = fmtVal(key, v);
+                    document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active-preset'));
+                    updateGraphics();
+                });
+
+                // Enter 鍵：強制套用並格式化
+                numbox.addEventListener('keydown', (ev) => {
+                    if (ev.key === 'Enter') {
+                        ev.preventDefault();
+                        const v = parseFloat(numbox.value);
+                        const cfg = PARAM_CONFIGS[key];
+                        if (!isNaN(v) && v >= cfg.min && v <= cfg.max) {
+                            numbox.value = fmtVal(key, v);
+                            numbox.classList.remove('invalid');
+                        }
+                        numbox.blur();
+                    }
+                });
+
+                // 失焦：格式化顯示
+                numbox.addEventListener('blur', () => {
+                    const v = parseFloat(numbox.value);
+                    const cfg = PARAM_CONFIGS[key];
+                    if (!isNaN(v) && v >= cfg.min && v <= cfg.max) {
+                        numbox.value = fmtVal(key, v);
+                        numbox.classList.remove('invalid');
+                    }
+                });
+            }
+        });
+
+        const speedEl = document.getElementById('param-speed');
+        if (speedEl) {
+            speedEl.addEventListener('input', (e) => {
+                const sliderVal = parseFloat(e.target.value);
+                state.speed = Math.pow(sliderVal / 50, 3);
+                document.getElementById('speed-val').innerText = state.speed.toFixed(2);
+            });
+        }
+
+        document.getElementById('toggle-moon').addEventListener('change', (e) => {
+            state.showMoon = e.target.checked;
+            if(state.showMoon) updateMoonOrbitGeometry();
+            updateGraphics();
+        });
+
+        document.getElementById('toggle-lighting').addEventListener('change', (e) => {
+            state.realisticLighting = e.target.checked;
+            updateGraphics();
+        });
+
+        document.getElementById('toggle-geo-orbit').addEventListener('change', (e) => {
+            state.showGeoOrbit = e.target.checked;
+            updateGraphics();
+        });
+
+        document.getElementById('toggle-geo-trail').addEventListener('change', (e) => {
+            state.showGeoTrail = e.target.checked;
+            updateGraphics();
+        });
+
+        document.getElementById('param-trail-days').addEventListener('input', (e) => {
+            state.trailDays = parseInt(e.target.value);
+            document.getElementById('trail-days-val').innerText = state.trailDays;
+            updateGraphics();
+        });
+
+        function setDateToUI(dateObj) {
+            state.jd = (dateObj.getTime() / 86400000) + 2440587.5;
+            const dStr = dateObj.toISOString().split('T')[0];
+            document.getElementById('param-date').value = dStr;
+            updateGraphics();
+        }
+
+        document.getElementById('param-date').addEventListener('change', (e) => {
+            const d = new Date(e.target.value);
+            if (!isNaN(d)) setDateToUI(d);
+        });
+
+        const btnPlayForward = document.getElementById('btn-play-forward');
+        const btnPlayBackward = document.getElementById('btn-play-backward');
+        const btnPause = document.getElementById('btn-pause');
+
+        function updatePlayButtons() {
+            btnPlayForward.classList.toggle('active', state.playDirection === 1);
+            btnPlayBackward.classList.toggle('active', state.playDirection === -1);
+            btnPause.classList.toggle('active', state.playDirection === 0);
+        }
+
+        btnPlayForward.onclick = () => { state.playDirection = 1; updatePlayButtons(); };
+        btnPlayBackward.onclick = () => { state.playDirection = -1; updatePlayButtons(); };
+        btnPause.onclick = () => { state.playDirection = 0; updatePlayButtons(); };
+
+        document.getElementById('btn-reset').onclick = () => setDateToUI(new Date("1979-12-30"));
+        document.getElementById('btn-today').onclick = () => setDateToUI(new Date());
+
+        function resizeCanvases() {
+            [helioEl, geoEl].forEach(container => {
+                const type = container.id === 'heliocentric' ? 'helio' : 'geo';
+                if(container.clientWidth === 0 || container.clientHeight === 0) return;
+                scenes[type].camera.aspect = container.clientWidth / container.clientHeight;
+                scenes[type].camera.updateProjectionMatrix();
+                scenes[type].renderer.setSize(container.clientWidth, container.clientHeight, false); 
+            });
+        }
+        window.addEventListener('resize', resizeCanvases);
+
+        let lastTime = performance.now();
+        function animate() {
+            requestAnimationFrame(animate);
+            const now = performance.now();
+            const dt = (now - lastTime) / 1000;
+            lastTime = now;
+
+            if (state.playDirection !== 0) {
+                state.jd += dt * 50 * state.speed * state.playDirection; 
+                const dateStr = new Date((state.jd - 2440587.5) * 86400000).toISOString().split('T')[0];
+                if (document.getElementById('param-date').value !== dateStr) {
+                    document.getElementById('param-date').value = dateStr;
+                }
+                updateGraphics();
+            }
+
+            scenes.helio.controls.update();
+            scenes.geo.controls.update();
+            scenes.helio.renderer.render(scenes.helio.scene, scenes.helio.camera);
+            scenes.geo.renderer.render(scenes.geo.scene, scenes.geo.camera);
+        }
+
+        // ── MPC 報告解析與天球標示 ────────────────────────────────────────────
+        const MPC_COLORS = [
+            0xe41a1c, 0x377eb8, 0x4daf4a, 0xff7f00, 0x984ea3,
+            0xa65628, 0xf781bf, 0x1b9e77, 0xd95f02, 0x7570b3
+        ];
+        const mpcObjects = {}; // key: designation, value: { meshes: [], color }
+
+        // 解析 MPC 80欄格式中的 RA (欄位 33-44) 和 Dec (欄位 45-56)
+        // 格式：HHMMSS.sss ±DDMMSS.ss
+        function parseMPCLine(line) {
+            if (line.length < 56 || line[0] === '#') return null;
+            // 天體編號/臨時編號：欄位 1-12
+            const desig = line.substring(0, 12).trim();
+            if (!desig) return null;
+
+            // RA: 欄位 33-44 (1-indexed)，轉為 0-indexed = 32-43
+            const raStr = line.substring(32, 44).trim();
+            // Dec: 欄位 45-56，0-indexed = 44-55
+            const decStr = line.substring(44, 56).trim();
+
+            if (!raStr || !decStr) return null;
+
+            // 解析 RA: HH MM SS.sss
+            const raParts = raStr.split(/\s+/);
+            if (raParts.length < 2) return null;
+            const raH = parseFloat(raParts[0]) || 0;
+            const raM = parseFloat(raParts[1]) || 0;
+            const raS = parseFloat(raParts[2]) || 0;
+            const ra_deg = (raH + raM / 60 + raS / 3600) * 15; // 轉為度
+
+            // 解析 Dec: ±DD MM SS.ss
+            const decParts = decStr.trim().split(/\s+/);
+            if (decParts.length < 2) return null;
+            const decSign = decParts[0][0] === '-' ? -1 : 1;
+            const decD = Math.abs(parseFloat(decParts[0])) || 0;
+            const decM = parseFloat(decParts[1]) || 0;
+            const decS = parseFloat(decParts[2]) || 0;
+            const dec_deg = decSign * (decD + decM / 60 + decS / 3600);
+
+            return { desig, ra_deg, dec_deg };
+        }
+
+        // 將赤道座標 (RA, Dec) 轉為天球上的 THREE.Vector3（半徑10）
+        // 注意：Three.js 的 Y 軸 = 北極，X-Z 平面 = 赤道，RA=0 指向 X 軸正方向
+        // 但場景是「右手系」且 RA 增加方向為逆時針（從北極看）
+        function raDecToVec(ra_deg, dec_deg) {
+            const ra = ra_deg * DEG2RAD;
+            const dec = dec_deg * DEG2RAD;
+            // X = cos(dec)*cos(ra), Y = sin(dec), Z = -cos(dec)*sin(ra)
+            // 負號讓 RA 往正確方向增加（與場景中赤經格線一致）
+            return new THREE.Vector3(
+                10 * Math.cos(dec) * Math.cos(ra),
+                10 * Math.sin(dec),
+                -10 * Math.cos(dec) * Math.sin(ra)
+            );
+        }
+
+        function clearMPCMarkers() {
+            for (const key in mpcObjects) {
+                mpcObjects[key].meshes.forEach(m => scenes.geo.scene.remove(m));
+            }
+            for (const key in mpcObjects) delete mpcObjects[key];
+            document.getElementById('mpc-status').textContent = '標示已清除';
+            document.getElementById('mpc-legend').style.display = 'none';
+            document.getElementById('mpc-legend').innerHTML = '';
+        }
+
+        function parseMPCReport() {
+            const text = document.getElementById('mpc-input').value.trim();
+            if (!text) {
+                document.getElementById('mpc-status').textContent = '請先貼入 MPC 報告';
+                return;
+            }
+
+            clearMPCMarkers();
+
+            const lines = text.split('\n');
+            let parsed = 0, skipped = 0;
+            let colorIdx = 0;
+
+            lines.forEach(line => {
+                const result = parseMPCLine(line);
+                if (!result) { skipped++; return; }
+
+                const { desig, ra_deg, dec_deg } = result;
+
+                // 每個獨立天體分配一個顏色
+                if (!mpcObjects[desig]) {
+                    mpcObjects[desig] = {
+                        meshes: [],
+                        color: MPC_COLORS[colorIdx % MPC_COLORS.length],
+                        ra_deg, dec_deg // 最後一筆位置用於圖例
+                    };
+                    colorIdx++;
+                }
+
+                // 建立點標示（小球）
+                const pos = raDecToVec(ra_deg, dec_deg);
+                const mat = new THREE.MeshBasicMaterial({ color: mpcObjects[desig].color });
+                const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 12), mat);
+                mesh.position.copy(pos);
+                scenes.geo.scene.add(mesh);
+                mpcObjects[desig].meshes.push(mesh);
+
+                // 更新最後一筆位置
+                mpcObjects[desig].ra_deg = ra_deg;
+                mpcObjects[desig].dec_deg = dec_deg;
+
+                parsed++;
+            });
+
+            // 更新狀態與圖例
+            const count = Object.keys(mpcObjects).length;
+            document.getElementById('mpc-status').textContent =
+                `已標示 ${count} 個天體，共 ${parsed} 筆觀測（跳過 ${skipped} 行）`;
+
+            const legend = document.getElementById('mpc-legend');
+            legend.innerHTML = '';
+            legend.style.display = 'block';
+            for (const key in mpcObjects) {
+                const obj = mpcObjects[key];
+                const hexColor = '#' + obj.color.toString(16).padStart(6, '0');
+                const item = document.createElement('div');
+                item.innerHTML = `<span class="mpc-legend-dot" style="background:${hexColor}"></span><span>${key}</span>`;
+                legend.appendChild(item);
+            }
+        }
+        // ── end MPC 觀測報告 ───────────────────────────────────────────────────
+
+        // ── MPCORB 軌道元素解析 ────────────────────────────────────────────────
+        // MPCORB 80欄格式說明（numbered asteroids）:
+        //  1- 7: 編號 (packed)
+        //  9-13: H (絕對星等)
+        // 15-19: G (斜率參數)
+        // 21-25: Epoch (packed: K25W10 = 2025-Nov-21.0)
+        // 27-35: M₀ (平近點角, deg)
+        // 38-46: ω (近日點幅角, deg)
+        // 49-57: Ω (升交點黃經, deg)
+        // 60-68: i (傾角, deg)
+        // 71-79: e (離心率)
+        // 81-91: n (平均運動, deg/day)
+        // 93-103: a (半長軸, AU)
+        // 106: U (軌道不確定性)
+        // 108-116: 參考資料
+
+        function mpcEpochToJD(packed) {
+            // packed epoch 格式：K25W10
+            // 世紀碼: I=18xx, J=19xx, K=20xx
+            const cenMap = { I: 1800, J: 1900, K: 2000 };
+            const cen = cenMap[packed[0]];
+            if (cen === undefined) return null;
+            const yr  = parseInt(packed.substring(1, 3), 10);
+            // 月份：1-9 = 1-9, A=10, B=11, C=12
+            const monStr = packed[3];
+            const mon = (monStr >= '1' && monStr <= '9') ? parseInt(monStr) : (monStr.charCodeAt(0) - 55);
+            // 日：1-9=1-9, A-Z=10-35 (只用到 A-V = 10-31)
+            const dayStr = packed[4];
+            const day = (dayStr >= '1' && dayStr <= '9') ? parseInt(dayStr) : (dayStr.charCodeAt(0) - 55);
+            const fullYear = cen + yr;
+            // 轉 JD：用格里曆
+            const a = Math.floor((14 - mon) / 12);
+            const y = fullYear + 4800 - a;
+            const m = mon + 12 * a - 3;
+            const jdn = day + Math.floor((153 * m + 2) / 5) + 365 * y +
+                        Math.floor(y / 4) - Math.floor(y / 100) + Math.floor(y / 400) - 32045;
+            return jdn - 0.5; // 0h TT
+        }
+
+        function parseMPCORB() {
+            const raw = document.getElementById('mpcorb-input').value.trim();
+            const statusEl = document.getElementById('mpcorb-status');
+            if (!raw) { statusEl.textContent = '請先貼入 MPCORB 一行格式'; return; }
+
+            // 取第一行非空行
+            const line = raw.split('\n').find(l => l.trim().length > 20);
+            if (!line) { statusEl.textContent = '無法辨識格式'; return; }
+
+            try {
+                // 欄位位置（0-indexed）
+                const epochPacked = line.substring(20, 25).trim();
+                const M0_str  = line.substring(26, 35).trim();
+                const w_str   = line.substring(37, 46).trim();
+                const om_str  = line.substring(48, 57).trim();
+                const i_str   = line.substring(59, 68).trim();
+                const e_str   = line.substring(70, 79).trim();
+                // a: 欄 92-103
+                const a_str   = line.substring(92, 103).trim();
+
+                const epochJD = mpcEpochToJD(epochPacked);
+                if (!epochJD) throw new Error(`無法解析 Epoch: "${epochPacked}"`);
+
+                const a  = parseFloat(a_str);
+                const e  = parseFloat(e_str);
+                const i  = parseFloat(i_str);
+                const om = parseFloat(om_str);
+                const w  = parseFloat(w_str);
+                const m0 = parseFloat(M0_str);
+
+                if ([a,e,i,om,w,m0].some(isNaN) || a <= 0 || e < 0 || e >= 1) {
+                    throw new Error(currentLang === 'zh' ? '數值解析失敗，請確認格式是否為 MPCORB numbered asteroid' : 'Value parsing failed — please check that this is MPCORB numbered asteroid format');
+                }
+
+                // 取天體名稱（欄 166+ 或最後一欄）
+                const namePart = line.length > 166 ? line.substring(166).trim() : '';
+
+                setPreset(a, e, i, om, w, m0, null, epochJD);
+                document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active-preset'));
+
+                const epochDateStr = jdToDateStr(epochJD);
+                const _d = langDict[currentLang];
+                statusEl.innerHTML = `<span style="color:#16a34a;font-weight:bold;">${_d.mpcorbSuccess}</span>　` +
+                    `<b>${namePart || _d.mpcorbUnnamed}</b>　Epoch: ${epochDateStr} (JD ${epochJD.toFixed(1)})`;
+
+            } catch(err) {
+                const _d = langDict[currentLang];
+                statusEl.innerHTML = `<span style="color:#dc2626;">${_d.mpcorbFail}${err.message}</span>`;
+            }
+        }
+        // ── end MPCORB ─────────────────────────────────────────────────────────
+
+
+        // ── Tooltip 公式說明系統 ───────────────────────────────────────────────
+        const TOOLTIP_DATA = {
+            period: {
+                title: '公轉週期 T',
+                formula: 'T = 2π × a^(3/2) / √(GM)',
+                lines: [
+                    '克卜勒第三定律：T² ∝ a³',
+                    'T = 2π√(a³/GM☉)',
+                    'a = 半長軸（AU）',
+                    'GM☉ = 1.327×10²⁰ m³/s²',
+                ],
+                note: '離太陽越遠，週期越長。例如：地球 a=1 AU → T=1年，海王星 a=30 AU → T≈165年'
+            },
+            velocity: {
+                title: '軌道速度 v（活力公式）',
+                formula: 'v = √[ GM☉ × (2/r − 1/a) ]',
+                lines: [
+                    '由能量守恆推導：Eₖ + Eₚ = 常數',
+                    'r = 目前與太陽距離（AU）',
+                    'a = 半長軸（AU）',
+                    '近日點（r最小）→ v最大',
+                    '遠日點（r最大）→ v最小',
+                ],
+                note: '地球軌道速度約 29.8 km/s，Apophis 近日點速度可達 ~36 km/s'
+            },
+            rsun: {
+                title: '與太陽距離 r',
+                formula: 'r = a(1 − e²) / (1 + e·cosν)',
+                lines: [
+                    'a = 半長軸，e = 離心率',
+                    'ν = 真近點角（目前位置角度）',
+                    '近日點 r_min = a(1−e)',
+                    '遠日點 r_max = a(1+e)',
+                ],
+                note: '圓形軌道 e=0 時 r 恆為 a；e 越大，距離變化越劇烈'
+            },
+            rearth: {
+                title: '與地球距離',
+                formula: 'd = |r⃗天體 − r⃗地球|',
+                lines: [
+                    '計算天體與地球在太陽系',
+                    '座標系中的三維向量差',
+                    '單位：天文單位（AU）',
+                    '1 AU ≈ 1.496×10⁸ km',
+                ],
+                note: '月球距離約 0.00257 AU，火星最近距離約 0.37 AU'
+            },
+            kinetic: {
+                title: '動能 Eₖ（每單位質量）',
+                formula: 'Eₖ = ½ v²',
+                lines: [
+                    'v = 軌道速度（m/s）',
+                    '= ½ × v²  [J/kg = m²/s²]',
+                    '顯示單位：MJ/kg = 10⁶ J/kg',
+                    '動能恆為正值',
+                ],
+                note: '天體越快、動能越大。近日點速度最快，動能最大'
+            },
+            potential: {
+                title: '重力位能 Eₚ（每單位質量）',
+                formula: 'Eₚ = −GM☉ / r',
+                lines: [
+                    'GM☉ = 1.327×10²⁰ m³/s²',
+                    'r = 距太陽距離（m）',
+                    '位能恆為負值（引力束縛）',
+                    '距太陽越近，位能越小（更負）',
+                ],
+                note: '位能的零點設在無限遠處。負值表示天體受太陽引力束縛'
+            },
+            total: {
+                title: '總機械能 E（每單位質量）',
+                formula: 'E = Eₖ + Eₚ = −GM☉ / (2a)',
+                lines: [
+                    '由活力公式可得：E 只與 a 有關',
+                    'a = 半長軸（m）',
+                    '橢圓軌道 E < 0（束縛態）',
+                    '拋物線軌道 E = 0（e=1）',
+                    '雙曲線軌道 E > 0（逃逸）',
+                ],
+                note: '總能量守恆！動能與位能互相轉換，但總和不變。這正是克卜勒定律的能量基礎'
+            }
+        };
+
+        const ttEl = document.getElementById('formula-tooltip');
+
+        function showTooltip(e, key) {
+            const data = TOOLTIP_DATA[key];
+            if (!data) return;
+            ttEl.innerHTML =
+                `<div class="tt-title">📐 ${data.title}</div>` +
+                `<div class="tt-formula">${data.formula}</div>` +
+                data.lines.map(l => `<div>• ${l}</div>`).join('') +
+                (data.note ? `<div class="tt-note">💡 ${data.note}</div>` : '');
+            ttEl.style.display = 'block';
+            positionTooltip(e);
+        }
+
+        function positionTooltip(e) {
+            const x = e.clientX + 14;
+            const y = e.clientY - 10;
+            const w = ttEl.offsetWidth  || 280;
+            const h = ttEl.offsetHeight || 160;
+            ttEl.style.left = (x + w > window.innerWidth  ? x - w - 28 : x) + 'px';
+            ttEl.style.top  = (y + h > window.innerHeight ? y - h + 20 : y) + 'px';
+        }
+
+        function hideTooltip() { ttEl.style.display = 'none'; }
+
+        // 綁定 data-tt 屬性的所有元素
+        document.querySelectorAll('[data-tt]').forEach(el => {
+            const key = el.getAttribute('data-tt');
+            el.addEventListener('mouseenter', e => showTooltip(e, key));
+            el.addEventListener('mousemove',  e => positionTooltip(e));
+            el.addEventListener('mouseleave', hideTooltip);
+        });
+        // ── end Tooltip ────────────────────────────────────────────────────────
+
+        window.onload = () => {
+            // 初始載入穀神星，Epoch 2025-Nov-21.0 = JD 2461000.5 (MPC K25W10)
+            setPreset(2.76916515, 0.07687242, 10.58888, 80.30553, 73.59769, 299.79, document.getElementById('btn-ceres'), 2461000.5);
+            updateMoonOrbitGeometry();
+            resizeCanvases();
+            updateGraphics();
+            animate();
+        };
+        // ── Language Dictionary & Switch Logic ─────────────────────────────────
+        const langDict = {
+            en: {
+                // View labels
+                helio: "Solar System View (Heliocentric)",
+                geo: "Celestial Sphere (Geocentric)",
+                // Controls col 1
+                quickLoad: "Quick Load:",
+                epoch: "Orbital Epoch:",
+                paramA: "(Semi-major axis AU)",
+                paramE: "(Eccentricity)",
+                paramI: "(Inclination °)",
+                paramOm: "(Long. Ascending Node °)",
+                paramW: "(Arg. of Perihelion °)",
+                paramM0: "(Mean Anomaly °)",
+                // Orbit info
+                orbitInfo: "📊 Real-time Orbit Info",
+                period: "Period T",
+                vel: "Velocity v",
+                rsun: "Dist to Sun",
+                rearth: "Dist to Earth",
+                ek: "Kinetic Ek",
+                ep: "Potential Ep",
+                etotal: "Total Energy E",
+                formulaNote: "Hover items to see formulas · Unit: MJ/kg",
+                // Controls col 2 – time
+                currDate: "📅 Current Date:",
+                speed: "Auto Speed:",
+                btnBackward: "Reverse",
+                btnPause: "Pause",
+                btnPlay: "Play",
+                btnReset: "Reset (1979)",
+                btnToday: "Today",
+                // Toggle labels
+                lighting: "Real Sunlight",
+                moon: "Show Moon System",
+                geoOrbit: "Show Orbit on Celestial Sphere",
+                geoTrail: "Show Past Trail on Celestial Sphere",
+                trailDays: "Trail length:",
+                daysUnit: "days",
+                // MPCORB
+                mpcorbTitle: "🔭 MPCORB Orbital Elements Parser:",
+                dataSource: "Data source:",
+                mpcorbHint: "Find all objects in 80-column format in MPCORB.DAT",
+                btnParseMpcorb: "Parse & Load Orbit",
+                btnClearMpcorb: "Clear",
+                // MPC obs
+                mpcTitle: "📋 MPC Observation Report Markers:",
+                mpcSource: "Data source:",
+                mpcHint: "Search for an object, copy & paste observation data from the download section",
+                btnParseMpc: "Parse & Mark",
+                btnClearMpc: "Clear Markers",
+                mpcNoReport: "No report loaded",
+                // Lang button
+                btnLang: "切換為中文 (Switch to Chinese)",
+                // Tooltip titles
+                ttPeriod: "Orbital Period T",
+                ttVelocity: "Orbital Velocity v (Vis-viva)",
+                ttRsun: "Distance to Sun r",
+                ttRearth: "Distance to Earth",
+                ttKinetic: "Kinetic Energy Eₖ (per unit mass)",
+                ttPotential: "Gravitational Potential Eₚ (per unit mass)",
+                ttTotal: "Total Mechanical Energy E (per unit mass)",
+                // Tooltip lines
+                ttPeriodLines: ["Kepler's Third Law: T² ∝ a³","T = 2π√(a³/GM☉)","a = semi-major axis (AU)","GM☉ = 1.327×10²⁰ m³/s²"],
+                ttPeriodNote: "Farther from the Sun → longer period. E.g. Earth a=1 AU → T=1 yr, Neptune a=30 AU → T≈165 yr",
+                ttVelocityLines: ["Derived from energy conservation: Eₖ + Eₚ = const","r = current distance from Sun (AU)","a = semi-major axis (AU)","Perihelion (r min) → v max","Aphelion (r max) → v min"],
+                ttVelocityNote: "Earth orbital speed ≈ 29.8 km/s; Apophis near perihelion can reach ~36 km/s",
+                ttRsunLines: ["a = semi-major axis, e = eccentricity","ν = true anomaly (current position angle)","Perihelion r_min = a(1−e)","Aphelion r_max = a(1+e)"],
+                ttRsunNote: "Circular orbit (e=0): r always equals a; higher e → more extreme distance variation",
+                ttRearthLines: ["Computed as 3D vector difference between","the object and Earth in heliocentric coordinates","Unit: Astronomical Units (AU)","1 AU ≈ 1.496×10⁸ km"],
+                ttRearthNote: "Moon ≈ 0.00257 AU; Mars closest approach ≈ 0.37 AU",
+                ttKineticLines: ["v = orbital velocity (m/s)","= ½ × v²  [J/kg = m²/s²]","Display unit: MJ/kg = 10⁶ J/kg","Kinetic energy is always positive"],
+                ttKineticNote: "Faster object → higher kinetic energy. Maximum at perihelion",
+                ttPotentialLines: ["GM☉ = 1.327×10²⁰ m³/s²","r = distance from Sun (m)","Potential energy is always negative (gravitational bound)","Closer to Sun → lower (more negative) potential"],
+                ttPotentialNote: "Zero reference at infinity. Negative value means the object is gravitationally bound to the Sun",
+                ttTotalLines: ["From vis-viva equation: E depends only on a","a = semi-major axis (m)","Elliptical orbit E < 0 (bound)","Parabolic orbit E = 0 (e=1)","Hyperbolic orbit E > 0 (escape)"],
+                ttTotalNote: "Total energy is conserved! Kinetic and potential exchange, but sum is constant — the energy basis of Kepler's laws",
+                // MPCORB status messages
+                mpcorbSuccess: "✔ Loaded successfully",
+                mpcorbUnnamed: "Unnamed",
+                mpcorbFail: "✘ Parse error:",
+            },
+            zh: {
+                helio: "太陽系軌道視圖 (日心模型)",
+                geo: "天球投影視圖 (地心模型)",
+                quickLoad: "快速載入：",
+                epoch: "軌道曆元 (Epoch):",
+                paramA: "(半長軸 AU)",
+                paramE: "(離心率)",
+                paramI: "(傾角 °)",
+                paramOm: "(升交點黃經 °)",
+                paramW: "(近日點幅角 °)",
+                paramM0: "(平近點角 °)",
+                orbitInfo: "📊 即時軌道資訊",
+                period: "公轉週期 T",
+                vel: "軌道速度 v",
+                rsun: "距太陽 r",
+                rearth: "距地球",
+                ek: "動能 Ek",
+                ep: "位能 Ep",
+                etotal: "總能量 E",
+                formulaNote: "滑鼠移到各項目查看計算公式 · 單位：MJ/kg",
+                currDate: "📅 目前日期：",
+                speed: "自動流逝速度：",
+                btnBackward: "倒轉",
+                btnPause: "暫停",
+                btnPlay: "播放",
+                btnReset: "初始時間(1979)",
+                btnToday: "今天日期",
+                lighting: "真實太陽光影",
+                moon: "顯示月球系統",
+                geoOrbit: "在天球上，顯示天體公轉軌道",
+                geoTrail: "在天球上，顯示天體過去路徑",
+                trailDays: "天體過去路徑長度設定:",
+                daysUnit: "天",
+                mpcorbTitle: "🔭 MPCORB 軌道元素解析：",
+                dataSource: "資料來源：",
+                mpcorbHint: "可在MPCORB.DAT找到所有天體的80欄格式",
+                btnParseMpcorb: "解析並載入軌道",
+                btnClearMpcorb: "清除",
+                mpcTitle: "📋 MPC 觀測報告標示：",
+                mpcSource: "資料來源：",
+                mpcHint: "搜尋天體，在觀測結果的download中，複製再貼上觀測資料",
+                btnParseMpc: "解析並標示",
+                btnClearMpc: "清除標示",
+                mpcNoReport: "尚未載入報告",
+                btnLang: "Switch to English (切換為英文)",
+                ttPeriod: "公轉週期 T",
+                ttVelocity: "軌道速度 v（活力公式）",
+                ttRsun: "與太陽距離 r",
+                ttRearth: "與地球距離",
+                ttKinetic: "動能 Eₖ（每單位質量）",
+                ttPotential: "重力位能 Eₚ（每單位質量）",
+                ttTotal: "總機械能 E（每單位質量）",
+                ttPeriodLines: ["克卜勒第三定律：T² ∝ a³","T = 2π√(a³/GM☉)","a = 半長軸（AU）","GM☉ = 1.327×10²⁰ m³/s²"],
+                ttPeriodNote: "離太陽越遠，週期越長。例如：地球 a=1 AU → T=1年，海王星 a=30 AU → T≈165年",
+                ttVelocityLines: ["由能量守恆推導：Eₖ + Eₚ = 常數","r = 目前與太陽距離（AU）","a = 半長軸（AU）","近日點（r最小）→ v最大","遠日點（r最大）→ v最小"],
+                ttVelocityNote: "地球軌道速度約 29.8 km/s，Apophis 近日點速度可達 ~36 km/s",
+                ttRsunLines: ["a = 半長軸，e = 離心率","ν = 真近點角（目前位置角度）","近日點 r_min = a(1−e)","遠日點 r_max = a(1+e)"],
+                ttRsunNote: "圓形軌道 e=0 時 r 恆為 a；e 越大，距離變化越劇烈",
+                ttRearthLines: ["計算天體與地球在太陽系","座標系中的三維向量差","單位：天文單位（AU）","1 AU ≈ 1.496×10⁸ km"],
+                ttRearthNote: "月球距離約 0.00257 AU，火星最近距離約 0.37 AU",
+                ttKineticLines: ["v = 軌道速度（m/s）","= ½ × v²  [J/kg = m²/s²]","顯示單位：MJ/kg = 10⁶ J/kg","動能恆為正值"],
+                ttKineticNote: "天體越快、動能越大。近日點速度最快，動能最大",
+                ttPotentialLines: ["GM☉ = 1.327×10²⁰ m³/s²","r = 距太陽距離（m）","位能恆為負值（引力束縛）","距太陽越近，位能越小（更負）"],
+                ttPotentialNote: "位能的零點設在無限遠處。負值表示天體受太陽引力束縛",
+                ttTotalLines: ["由活力公式可得：E 只與 a 有關","a = 半長軸（m）","橢圓軌道 E < 0（束縛態）","拋物線軌道 E = 0（e=1）","雙曲線軌道 E > 0（逃逸）"],
+                ttTotalNote: "總能量守恆！動能與位能互相轉換，但總和不變。這正是克卜勒定律的能量基礎",
+                mpcorbSuccess: "✔ 載入成功",
+                mpcorbUnnamed: "未命名",
+                mpcorbFail: "✘ 解析失敗：",
+            }
+        };
+
+        let currentLang = 'en';
+
+        function applyLang(l) {
+            const d = langDict[l];
+
+            // View labels
+            const elHelio = document.getElementById('lbl-helio');
+            if (elHelio) elHelio.innerText = d.helio;
+            const elGeo = document.getElementById('lbl-geo');
+            if (elGeo) elGeo.innerText = d.geo;
+
+            // Col 1 – quick load & params
+            const elQL = document.getElementById('lbl-quick-load');
+            if (elQL) elQL.innerText = d.quickLoad;
+            const elEpoch = document.getElementById('lbl-epoch');
+            if (elEpoch) elEpoch.innerText = d.epoch;
+            const paramMap = { 'lbl-param-a': 'paramA', 'lbl-param-e': 'paramE', 'lbl-param-i': 'paramI',
+                               'lbl-param-om': 'paramOm', 'lbl-param-w': 'paramW', 'lbl-param-m0': 'paramM0' };
+            for (const [id, key] of Object.entries(paramMap)) {
+                const el = document.getElementById(id);
+                if (el) el.innerText = d[key];
+            }
+            // Preset buttons
+            document.querySelectorAll('.preset-btn[data-zh]').forEach(btn => {
+                btn.innerText = btn.getAttribute('data-' + l);
+            });
+
+            // Orbit info table
+            const elOI = document.getElementById('orbit-info-title');
+            if (elOI) elOI.innerText = d.orbitInfo;
+            const elFN = document.getElementById('formula-note');
+            if (elFN) elFN.innerText = d.formulaNote;
+            const ths = document.querySelectorAll('.orbit-info-label');
+            const orbitKeys = ['period','vel','rsun','rearth','ek','ep','etotal'];
+            ths.forEach((th, i) => { if (orbitKeys[i]) th.innerText = d[orbitKeys[i]]; });
+
+            // Col 2 – time controls
+            const elCD = document.getElementById('lbl-curr-date');
+            if (elCD) elCD.innerText = d.currDate;
+            const elSp = document.getElementById('lbl-speed');
+            if (elSp) elSp.innerText = d.speed;
+            ['btn-play-backward','btn-pause','btn-play-forward','btn-reset','btn-today'].forEach(id => {
+                const btn = document.getElementById(id);
+                if (btn) btn.innerText = d[{
+                    'btn-play-backward':'btnBackward','btn-pause':'btnPause','btn-play-forward':'btnPlay',
+                    'btn-reset':'btnReset','btn-today':'btnToday'
+                }[id]];
+            });
+
+            // Toggle labels
+            const toggleMap = { 'lbl-lighting':'lighting','lbl-moon':'moon','lbl-geo-orbit':'geoOrbit','lbl-geo-trail':'geoTrail' };
+            for (const [id, key] of Object.entries(toggleMap)) {
+                const el = document.getElementById(id);
+                if (el) el.innerText = d[key];
+            }
+            const elDU = document.getElementById('lbl-days-unit');
+            if (elDU) elDU.innerText = d.daysUnit;
+
+            // MPCORB section
+            const mpcorbMap = {
+                'lbl-mpcorb-title':'mpcorbTitle','lbl-data-source':'dataSource','lbl-mpcorb-hint':'mpcorbHint',
+                'btn-parse-mpcorb':'btnParseMpcorb','btn-clear-mpcorb':'btnClearMpcorb',
+                'lbl-mpc-title':'mpcTitle','lbl-mpc-source':'mpcSource','lbl-mpc-hint':'mpcHint',
+                'btn-parse-mpc':'btnParseMpc','btn-clear-mpc':'btnClearMpc'
+            };
+            for (const [id, key] of Object.entries(mpcorbMap)) {
+                const el = document.getElementById(id);
+                if (el) el.innerText = d[key];
+            }
+            // MPC status reset text only if it still shows the "no report" default
+            const mpcStatus = document.getElementById('mpc-status');
+            if (mpcStatus && (mpcStatus.innerText === langDict.en.mpcNoReport || mpcStatus.innerText === langDict.zh.mpcNoReport)) {
+                mpcStatus.innerText = d.mpcNoReport;
+            }
+
+            // Lang toggle button
+            const btn = document.getElementById('lang-toggle-btn');
+            if (btn) btn.innerText = d.btnLang;
+
+            // Tooltips – rebuild TOOLTIP_DATA in current language
+            TOOLTIP_DATA.period    = { title: d.ttPeriod,    formula: 'T = 2π × a^(3/2) / √(GM)', lines: d.ttPeriodLines,    note: d.ttPeriodNote };
+            TOOLTIP_DATA.velocity  = { title: d.ttVelocity,  formula: 'v = √[ GM☉ × (2/r − 1/a) ]', lines: d.ttVelocityLines, note: d.ttVelocityNote };
+            TOOLTIP_DATA.rsun      = { title: d.ttRsun,      formula: 'r = a(1 − e²) / (1 + e·cosν)', lines: d.ttRsunLines,   note: d.ttRsunNote };
+            TOOLTIP_DATA.rearth    = { title: d.ttRearth,    formula: 'd = |r⃗天體 − r⃗地球|', lines: d.ttRearthLines,         note: d.ttRearthNote };
+            TOOLTIP_DATA.kinetic   = { title: d.ttKinetic,   formula: 'Eₖ = ½ v²', lines: d.ttKineticLines,                  note: d.ttKineticNote };
+            TOOLTIP_DATA.potential = { title: d.ttPotential, formula: 'Eₚ = −GM☉ / r', lines: d.ttPotentialLines,            note: d.ttPotentialNote };
+            TOOLTIP_DATA.total     = { title: d.ttTotal,     formula: 'E = Eₖ + Eₚ = −GM☉ / (2a)', lines: d.ttTotalLines,    note: d.ttTotalNote };
+
+            // html lang attribute
+            document.documentElement.lang = l === 'zh' ? 'zh-TW' : 'en';
+        }
+
+        // Bind toggle button
+        document.getElementById('lang-toggle-btn').addEventListener('click', () => {
+            currentLang = (currentLang === 'en') ? 'zh' : 'en';
+            applyLang(currentLang);
+        });
+
+        // Apply English on load
+        window.addEventListener('DOMContentLoaded', () => {
+            applyLang('en');
+        });
+    </script>
+</body>
+</html>
