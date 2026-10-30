@@ -254,8 +254,8 @@
             <div class="control-group bg-white p-3 rounded shadow-sm border border-gray-200">
                 <div class="presets">
                     <span id="lbl-quick-load" class="text-sm font-bold text-gray-700 self-center mr-1">Quick Load:</span>
-                    <button class="preset-btn" onclick="setPreset(0.72333566,0.00677323,3.39467,76.67984,54.85229,78.93,this,2461000.5)" data-zh="金星" data-en="Venus">Venus</button>
-                    <button class="preset-btn" onclick="setPreset(5.20336301,0.04839266,1.30530,100.55615,14.75385,85.19,this,2461000.5)" data-zh="木星" data-en="Jupiter">Jupiter</button>
+                    <button class="preset-btn" onclick="setPlanetPreset('Venus',this)" data-zh="金星" data-en="Venus">Venus</button>
+                    <button class="preset-btn" onclick="setPlanetPreset('Jupiter',this)" data-zh="木星" data-en="Jupiter">Jupiter</button>
                     <button class="preset-btn" onclick="setPreset(39.48168677,0.24880766,17.14175,110.30347,113.76329,52.07,this,2461000.5)" data-zh="冥王星" data-en="Pluto">Pluto</button>
                     <button class="preset-btn" id="btn-ceres" onclick="setPreset(2.76916515,0.07687242,10.58888,80.30553,73.59769,299.79,this,2461000.5)" data-zh="穀神星（1 Ceres）" data-en="Ceres (1 Ceres)">Ceres (1 Ceres)</button>
                     <button class="preset-btn" onclick="setPreset(1.2714, 0.8899, 22.26, 265.22, 322.19, 334.02, this, 2460200.5)" data-zh="法厄同小行星（3200 Phaethon）" data-en="Phaethon (3200)">Phaethon (3200)</button>
@@ -263,6 +263,16 @@
                     <button class="preset-btn" onclick="setPreset(1.12636220,0.20375139,6.03494,2.06087,66.22307,205.32,this,2461000.5)" data-zh="貝努小行星（101955 Bennu）" data-en="Bennu (101955)">Bennu (101955)</button>
                     <button class="preset-btn" onclick="setPreset(17.83414508,0.96714291,162.26269,58.42008,111.33249,190.19,this,2461000.5)" data-zh="哈雷彗星 1P/Halley）" data-en="Halley's Comet (1P)">Halley's Comet (1P)</button>
                     <button class="preset-btn" onclick="setPreset(2.21449314,0.84833156,11.78308,334.56582,186.54970,230.53,this,2461000.5)" data-zh="恩克彗星（2P/Encke）" data-en="Encke Comet (2P)">Encke Comet (2P)</button>
+                    <span id="lbl-mpc-search-label" class="text-sm font-bold text-gray-700">MPC:</span>
+                    <input id="mpc-object-ref" type="text" placeholder="Asteroid ID" aria-label="MPC asteroid ID"
+                        style="width:125px;max-width:38vw;box-sizing:border-box;font-family:inherit;font-size:0.78rem;border:1px solid #bbb;border-radius:4px;padding:5px 7px;background:#fff;">
+                    <button id="btn-open-mpc-object" class="action-btn bg-orange-100" type="button" aria-label="Search MPC" title="Search MPC"
+                        style="width:30px;min-width:30px;max-width:30px;height:30px;box-sizing:border-box;flex:0 0 30px;padding:4px;margin:0;display:inline-flex;align-items:center;justify-content:center;">
+                        <svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="10.8" cy="10.8" r="6.8"></circle><path d="m16 16 5 5"></path>
+                        </svg>
+                    </button>
+                    <span id="mpc-easy-status" aria-live="polite" style="font-size:0.68rem;color:#666;"></span>
                 </div>
 
                 <!-- Epoch 輸入列 -->
@@ -381,6 +391,10 @@
                     <input type="checkbox" id="toggle-moon" class="ml-2 w-4 h-4" style="flex-shrink:0;">
                 </label>
                 <label style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;" class="!text-sm !font-bold cursor-pointer text-gray-800 hover:text-blue-600 transition-colors">
+                    <span>🪐 <span id="lbl-planet-orbits">Show planetary orbits (Mercury–Neptune)</span></span>
+                    <input type="checkbox" id="toggle-planet-orbits" class="ml-2 w-4 h-4" style="flex-shrink:0;">
+                </label>
+                <label style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;" class="!text-sm !font-bold cursor-pointer text-gray-800 hover:text-blue-600 transition-colors">
                     <span>🪐 <span id="lbl-geo-orbit">Show Orbit on Celestial Sphere</span></span>
                     <input type="checkbox" id="toggle-geo-orbit" class="ml-2 w-4 h-4" style="flex-shrink:0;">
                 </label>
@@ -407,7 +421,7 @@
                            style="color:#d97706; font-weight:bold; text-decoration:underline;">MPC MPCORB Database</a>
                         <br><span id="lbl-mpcorb-hint">Find all objects in 80-column format in MPCORB.DAT</span>
                     </div>
-                    <textarea id="mpcorb-input" rows="3" style="width:100%;font-family:monospace;font-size:0.68rem;resize:vertical;border:1px solid #ccc;border-radius:4px;padding:4px 6px;box-sizing:border-box;background:#fffdf7;margin-top:4px;" id="mpcorb-placeholder-el" placeholder="Paste one line of MPCORB 80-column format, e.g.:&#10;00001   3.34  0.12 K25W10 299.7906  73.6002  80.3042  10.5884 0.0768919 0.21413419   2.7693417  0 MPO780935  7072 116 1802-2024 0.66 M-v 3Ek Pan     0000      (1) Ceres"></textarea>
+                    <textarea id="mpcorb-input" rows="3" style="width:100%;font-family:monospace;font-size:0.68rem;resize:vertical;border:1px solid #ccc;border-radius:4px;padding:4px 6px;box-sizing:border-box;background:#fffdf7;margin-top:4px;" placeholder="Paste one line of MPCORB 80-column format, e.g.:&#10;00001   3.34  0.12 K25BL 299.7906  73.6002  80.3042  10.5884 0.0768919 0.21413419   2.7693417  0 MPO780935  7072 116 1802-2024 0.66 M-v 3Ek Pan     0000      (1) Ceres"></textarea>
                     <div class="btn-group mt-1">
                         <button onclick="parseMPCORB()" class="action-btn bg-orange-100" id="btn-parse-mpcorb" data-zh="解析並載入軌道" data-en="Parse & Load Orbit">Parse & Load Orbit</button>
                         <button onclick="document.getElementById('mpcorb-input').value='';document.getElementById('mpcorb-status').textContent=''" class="action-btn" id="btn-clear-mpcorb" data-zh="清除" data-en="Clear">Clear</button>
@@ -425,9 +439,16 @@
                            style="color:#b45309; font-weight:bold; text-decoration:underline;">MPC Database</a>
                         <br><span id="lbl-mpc-hint">Search for an object, copy & paste observation data from the download section</span>
                     </div>
-                    <textarea id="mpc-input" rows="3" style="width:100%;font-family:monospace;font-size:0.68rem;resize:vertical;border:1px solid #ccc;border-radius:4px;padding:4px 6px;box-sizing:border-box;background:#fdfdfd;margin-top:4px;" placeholder="Paste MPC 80-column observation report, one record per line...&#10;e.g.:&#10;00001K25A01F  C2025 01 15.12345 03 14 35.6 +05 22 11 14.5 R J01 EXAMPLE"></textarea>
+                    <textarea id="mpc-input" rows="3" style="width:100%;font-family:monospace;font-size:0.68rem;resize:vertical;border:1px solid #ccc;border-radius:4px;padding:4px 6px;box-sizing:border-box;background:#fdfdfd;margin-top:4px;" placeholder="Paste MPC observation rows, one record per line..."></textarea>
+                    <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:5px;font-size:0.7rem;">
+                        <label for="mpc-date-from" id="lbl-mpc-date-from">From</label>
+                        <input type="date" id="mpc-date-from" style="width:auto;min-width:0;font-size:0.7rem;padding:2px 3px;">
+                        <label for="mpc-date-to" id="lbl-mpc-date-to">To</label>
+                        <input type="date" id="mpc-date-to" style="width:auto;min-width:0;font-size:0.7rem;padding:2px 3px;">
+                        <button type="button" onclick="parseMPCReportSafely()" class="action-btn" id="btn-mpc-date-apply" data-zh="套用區間" data-en="Apply range" style="font-size:0.68rem;padding:3px 6px;">Apply range</button>
+                    </div>
                     <div class="btn-group mt-1">
-                        <button onclick="parseMPCReport()" class="action-btn bg-yellow-100" id="btn-parse-mpc" data-zh="解析並標示" data-en="Parse & Mark">Parse & Mark</button>
+                        <button onclick="parseMPCReportSafely()" class="action-btn bg-yellow-100" id="btn-parse-mpc" data-zh="解析並標示" data-en="Parse & Mark">Parse & Mark</button>
                         <button onclick="clearMPCMarkers()" class="action-btn" id="btn-clear-mpc" data-zh="清除標示" data-en="Clear Markers">Clear Markers</button>
                     </div>
                     <div id="mpc-status" style="font-size:0.72rem;color:#666;margin-top:3px;min-height:1.2em;">No report loaded</div>
@@ -460,8 +481,19 @@
             epoch: J2000_JD    // 曆元 JD
         };
 
+        // Approximate J2000-ecliptic planetary elements from JPL; Earth is already shown separately.
+        const PLANET_ORBIT_ELEMENTS = [
+            {name:'Mercury', a:0.38709927, e:0.20563593, i:7.00497902, om:48.33076593, w:29.12703035, m0:174.79252722, color:0x777777},
+            {name:'Venus',   a:0.72333566, e:0.00677672, i:3.39467605, om:76.67984255, w:54.92262463, m0:50.37663232, color:0xc47b32},
+            {name:'Mars',    a:1.52371034, e:0.09339410, i:1.84969142, om:49.55953891, w:286.49683150, m0:19.39019754, color:0xc43d32},
+            {name:'Jupiter', a:5.20288700, e:0.04838624, i:1.30439695, om:100.47390909, w:274.25457074, m0:19.66796068, color:0xb27a28},
+            {name:'Saturn',  a:9.53667594, e:0.05386179, i:2.48599187, om:113.66242448, w:338.93645383, m0:317.35536592, color:0x9b8346},
+            {name:'Uranus',  a:19.18916464, e:0.04725744, i:0.77263783, om:74.01692503, w:96.93735127, m0:142.28382821, color:0x268c8c},
+            {name:'Neptune', a:30.06992276, e:0.00859048, i:1.77004347, om:131.78422574, w:273.18053653, m0:259.91520804, color:0x3155a6}
+        ];
 
-        // 曆元 Epoch 2025-Nov-21.0 = JD 2461000.5 (MPC 標準曆元 K25W10)
+
+        // 曆元 Epoch 2025-Nov-21.0 = JD 2461000.5 (MPC packed epoch K25BL)
         const MPC_EPOCH_JD = 2461000.5;
 
         const state = {
@@ -471,6 +503,7 @@
             epoch: MPC_EPOCH_JD, // 軌道元素的曆元 JD
             showMoon: false,
             realisticLighting: false,
+            showPlanetOrbits: false,
             showGeoOrbit: false,
             showGeoTrail: true,
             trailDays: 30,
@@ -582,6 +615,7 @@
 
         const objects = {
             sun: null, earth: null, earthOrbit: null, asteroid: null, asteroidOrbit: null,
+            planetOrbits: [],
             geoEarth: null, geoSun: null, geoAsteroid: null, geoAsteroidOrbitFull: null, 
             geoAsteroidOrbit30Day: null, geoEcliptic: null,
             earthAxisHelio: null, earthAxisGeo: null,
@@ -640,6 +674,23 @@
             objects.earthOrbit = new THREE.Line(new THREE.BufferGeometry().setFromPoints(earthOrbitPoints), new THREE.LineBasicMaterial({ color: 0xcccccc }));
             scenes.helio.scene.add(objects.earthOrbit);
 
+            // Draw reference orbits for the seven planets other than Earth.
+            PLANET_ORBIT_ELEMENTS.forEach(planet => {
+                const points = [];
+                for (let j = 0; j <= 240; j++) {
+                    const E = (j / 240) * Math.PI * 2;
+                    points.push(getPosFromE(planet.a, planet.e, planet.i, planet.om, planet.w, E));
+                }
+                const orbit = new THREE.Line(
+                    new THREE.BufferGeometry().setFromPoints(points),
+                    new THREE.LineBasicMaterial({color: planet.color, transparent: true, opacity: 0.72})
+                );
+                orbit.name = `${planet.name} reference orbit`;
+                orbit.visible = state.showPlanetOrbits;
+                scenes.helio.scene.add(orbit);
+                objects.planetOrbits.push(orbit);
+            });
+
             // 小行星與其軌道顏色改為紫色 #9467BD
             objects.asteroid = new THREE.Mesh(new THREE.SphereGeometry(0.12, 24, 24), new THREE.MeshStandardMaterial({ color: 0x9467bd }));
             scenes.helio.scene.add(objects.asteroid);
@@ -672,14 +723,15 @@
                 const points = [];
                 const radius = 10 * Math.cos(lat * DEG2RAD);
                 const y = 10 * Math.sin(lat * DEG2RAD);
-                for (let lon = 0; lon <= 64; lon++) points.push(new THREE.Vector3(Math.cos(lon/64*Math.PI*2)*radius, y, Math.sin(lon/64*Math.PI*2)*radius));
+                for (let lon = 0; lon <= 64; lon++) points.push(new THREE.Vector3(Math.cos(lon/64*Math.PI*2)*radius, y, -Math.sin(lon/64*Math.PI*2)*radius));
                 gridGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), gridMat));
             }
             for (let lon = 0; lon < 360; lon += 30) {
                 const points = [];
                 for (let lat = -90; lat <= 90; lat += 5) {
                     const r_lat = lat * DEG2RAD, r_lon = lon * DEG2RAD;
-                    points.push(new THREE.Vector3(Math.cos(r_lon)*10*Math.cos(r_lat), 10*Math.sin(r_lat), Math.sin(r_lon)*10*Math.cos(r_lat)));
+                    // Match MPC RA coordinates: increasing right ascension points toward negative Z.
+                    points.push(new THREE.Vector3(Math.cos(r_lon)*10*Math.cos(r_lat), 10*Math.sin(r_lat), -Math.sin(r_lon)*10*Math.cos(r_lat)));
                 }
                 // 特別將赤經 0 度 (lon === 0) 的線設為較深的灰色
                 const lineMat = (lon === 0) ? new THREE.LineBasicMaterial({ color: 0x666666, linewidth: 2, transparent: true, opacity: 0.8 }) : gridMat;
@@ -1077,13 +1129,24 @@
 
             // slider a 的 max 動態調整
             const aSlider = document.getElementById('param-a');
-            if (aSlider) aSlider.max = (a > 5) ? 50 : 50; // 統一 50 AU 上限
+            PARAM_CONFIGS.a.max = Math.max(50, a);
+            if (aSlider) aSlider.max = PARAM_CONFIGS.a.max;
+            const aNumbox = document.getElementById('num-a');
+            if (aNumbox) aNumbox.max = PARAM_CONFIGS.a.max;
 
             if (btnElement) {
                 document.querySelectorAll('.preset-btn').forEach(btn => btn.classList.remove('active-preset'));
                 btnElement.classList.add('active-preset');
             }
             updateGraphics();
+        }
+
+        // Use the same J2000 elements as the displayed reference orbit so the selected
+        // planet's position always lies on its matching ellipse.
+        function setPlanetPreset(name, btnElement) {
+            const planet = PLANET_ORBIT_ELEMENTS.find(item => item.name === name);
+            if (!planet) return;
+            setPreset(planet.a, planet.e, planet.i, planet.om, planet.w, planet.m0, btnElement, J2000_JD);
         }
 
         // ── 精度固定為 7 位小數 ───────────────────────────────────────────────
@@ -1115,8 +1178,8 @@
 
         // ── Epoch 日期輸入 ─────────────────────────────────────────────────────
         function dateStrToJD(dateStr) {
-            // dateStr 格式: YYYY-MM-DD
-            const d = new Date(dateStr + 'T12:00:00Z'); // 正午 TT ≈ 正午 UTC
+            // MPC epoch dates refer to 0h; a date-only field maps to that day's midnight.
+            const d = new Date(dateStr + 'T00:00:00Z');
             if (isNaN(d.getTime())) return null;
             return d.getTime() / 86400000 + 2440587.5;
         }
@@ -1217,6 +1280,11 @@
             updateGraphics();
         });
 
+        document.getElementById('toggle-planet-orbits').addEventListener('change', (e) => {
+            state.showPlanetOrbits = e.target.checked;
+            objects.planetOrbits.forEach(orbit => { orbit.visible = state.showPlanetOrbits; });
+        });
+
         document.getElementById('toggle-lighting').addEventListener('change', (e) => {
             state.realisticLighting = e.target.checked;
             updateGraphics();
@@ -1305,14 +1373,52 @@
             0xe41a1c, 0x377eb8, 0x4daf4a, 0xff7f00, 0x984ea3,
             0xa65628, 0xf781bf, 0x1b9e77, 0xd95f02, 0x7570b3
         ];
-        const mpcObjects = {}; // key: designation, value: { meshes: [], color }
+        const mpcObjects = Object.create(null); // key: designation, value: { meshes: [], color }
+        let mpcLastReportText = '';
+        const MPC_MARKER_GEOMETRY = new THREE.SphereGeometry(0.15, 12, 12);
+        const MPC_MAX_OBSERVATIONS = 20000;
+
+        function mpcObservationDate(line) {
+            const match = line.match(/(?:^|\D)(\d{4})\s+(\d{2})\s+(\d{2})(?:\.\d+)?/);
+            if (!match) return '';
+            const year = Number(match[1]), month = Number(match[2]), day = Number(match[3]);
+            const date = new Date(Date.UTC(year, month - 1, day));
+            if (year < 1800 || month < 1 || month > 12 || day < 1 ||
+                date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return '';
+            return `${match[1]}-${match[2]}-${match[3]}`;
+        }
 
         // 解析 MPC 80欄格式中的 RA (欄位 33-44) 和 Dec (欄位 45-56)
         // 格式：HHMMSS.sss ±DDMMSS.ss
         function parseMPCLine(line) {
-            if (line.length < 56 || line[0] === '#') return null;
+            if (!line || line.trimStart().startsWith('#')) return null;
+
+            // MPC 的部分下載檔會省略固定欄位間的空格：日期小數與 RA 時數、
+            // RA 秒數與 Dec 度數會直接相連，例如 25.32625917 21 16.500-44。
+            // 以日期/座標結構解析，並從開頭取 designation，避免把後續欄位併入名稱。
+            const compact = line.match(/(\d{4})\s+(\d{2})\s+(\d{2}\.\d{5,})(\d{2})\s+(\d{2})\s+(\d{2}\.\d+)([+-]\d{2})\s+(\d{2})\s+(\d{2}\.\d+)/);
+            if (compact) {
+                const compactPrefix = line.trimStart();
+                const numberedDesig = compactPrefix.match(/^(\d{5})/);
+                const compactDesig = numberedDesig || compactPrefix.match(/^[^\s]+/);
+                const [, , , , raHourText, raMinuteText, raSecondText, decDegreeText, decMinuteText, decSecondText] = compact;
+                const raH = Number(raHourText), raM = Number(raMinuteText), raS = Number(raSecondText);
+                const decSign = decDegreeText[0] === '-' ? -1 : 1;
+                const decD = Math.abs(Number(decDegreeText)), decM = Number(decMinuteText), decS = Number(decSecondText);
+                if (compactDesig && raH < 24 && raM < 60 && raS < 60 && decD <= 90 && decM < 60 && decS < 60 && !(decD === 90 && (decM !== 0 || decS !== 0))) {
+                    return {
+                        desig: compactDesig[0].replace(/\*.*$/, ''),
+                        ra_deg: (raH + raM / 60 + raS / 3600) * 15,
+                        dec_deg: decSign * (decD + decM / 60 + decS / 3600),
+                        date: mpcObservationDate(line)
+                    };
+                }
+            }
+
+            if (line.length < 56) return null;
             // 天體編號/臨時編號：欄位 1-12
-            const desig = line.substring(0, 12).trim();
+            const number = line.substring(0, 5).trim();
+            const desig = /^\d{5}$/.test(number) ? number : line.substring(0, 12).trim();
             if (!desig) return null;
 
             // RA: 欄位 33-44 (1-indexed)，轉為 0-indexed = 32-43
@@ -1324,22 +1430,25 @@
 
             // 解析 RA: HH MM SS.sss
             const raParts = raStr.split(/\s+/);
-            if (raParts.length < 2) return null;
-            const raH = parseFloat(raParts[0]) || 0;
-            const raM = parseFloat(raParts[1]) || 0;
-            const raS = parseFloat(raParts[2]) || 0;
+            if (raParts.length !== 3 || raParts.some(part => part === '' || !Number.isFinite(Number(part)))) return null;
+            const raH = Number(raParts[0]);
+            const raM = Number(raParts[1]);
+            const raS = Number(raParts[2]);
+            if (raH < 0 || raH >= 24 || raM < 0 || raM >= 60 || raS < 0 || raS >= 60) return null;
             const ra_deg = (raH + raM / 60 + raS / 3600) * 15; // 轉為度
 
             // 解析 Dec: ±DD MM SS.ss
             const decParts = decStr.trim().split(/\s+/);
-            if (decParts.length < 2) return null;
+            if (decParts.length !== 3 || decParts.some(part => part === '' || !Number.isFinite(Number(part)))) return null;
+            if (!/^[+-]\d{2}$/.test(decParts[0])) return null;
             const decSign = decParts[0][0] === '-' ? -1 : 1;
-            const decD = Math.abs(parseFloat(decParts[0])) || 0;
-            const decM = parseFloat(decParts[1]) || 0;
-            const decS = parseFloat(decParts[2]) || 0;
+            const decD = Math.abs(Number(decParts[0]));
+            const decM = Number(decParts[1]);
+            const decS = Number(decParts[2]);
+            if (decD > 90 || decM < 0 || decM >= 60 || decS < 0 || decS >= 60 || (decD === 90 && (decM !== 0 || decS !== 0))) return null;
             const dec_deg = decSign * (decD + decM / 60 + decS / 3600);
 
-            return { desig, ra_deg, dec_deg };
+            return { desig, ra_deg, dec_deg, date: mpcObservationDate(line) };
         }
 
         // 將赤道座標 (RA, Dec) 轉為天球上的 THREE.Vector3（半徑10）
@@ -1357,32 +1466,96 @@
             );
         }
 
-        function clearMPCMarkers() {
+        function clearMPCMarkers(updateStatus = true) {
             for (const key in mpcObjects) {
-                mpcObjects[key].meshes.forEach(m => scenes.geo.scene.remove(m));
+                mpcObjects[key].meshes.forEach(m => {
+                    scenes.geo.scene.remove(m);
+                });
+                mpcObjects[key].material.dispose();
             }
             for (const key in mpcObjects) delete mpcObjects[key];
-            document.getElementById('mpc-status').textContent = '標示已清除';
+            if (updateStatus) document.getElementById('mpc-status').textContent = langDict[currentLang].mpcCleared;
             document.getElementById('mpc-legend').style.display = 'none';
             document.getElementById('mpc-legend').innerHTML = '';
         }
 
+        function extractMpcObs80(payload) {
+            if (typeof payload === 'string') return payload.trim() || null;
+            if (Array.isArray(payload)) {
+                for (const item of payload) {
+                    const found = extractMpcObs80(item);
+                    if (found) return found;
+                }
+                return null;
+            }
+            if (!payload || typeof payload !== 'object') return null;
+            for (const key of ['OBS80', 'obs80', 'observations80']) {
+                if (typeof payload[key] === 'string' && payload[key].trim()) return payload[key].trim();
+            }
+            for (const key of ['observations', 'data', 'result']) {
+                if (payload[key] !== undefined) {
+                    const found = extractMpcObs80(payload[key]);
+                    if (found) return found;
+                }
+            }
+            return null;
+        }
+
         function parseMPCReport() {
-            const text = document.getElementById('mpc-input').value.trim();
+            const raw = document.getElementById('mpc-input').value.trim();
+            let text = raw;
+            if (raw.startsWith('{') || raw.startsWith('[')) {
+                try { text = extractMpcObs80(JSON.parse(raw)) || raw; } catch (_) { /* raw text parser will report invalid records */ }
+            }
             if (!text) {
                 document.getElementById('mpc-status').textContent = '請先貼入 MPC 報告';
                 return;
             }
 
-            clearMPCMarkers();
+            if (text !== mpcLastReportText) {
+                document.getElementById('mpc-date-from').value = '';
+                document.getElementById('mpc-date-to').value = '';
+                mpcLastReportText = text;
+            }
 
-            const lines = text.split('\n');
-            let parsed = 0, skipped = 0;
+            const observations = [];
+            let skipped = 0;
+            text.split('\n').forEach(line => {
+                const result = parseMPCLine(line);
+                if (result) observations.push(result);
+                else if (line.trim() && !line.trimStart().startsWith('#')) skipped++;
+            });
+            if (!observations.length) {
+                clearMPCMarkers(false);
+                document.getElementById('mpc-status').textContent = langDict[currentLang].mpcNoObservations;
+                return;
+            }
+
+            const dateBounds = observations.reduce((bounds, obs) => {
+                if (!obs.date) return bounds;
+                if (!bounds.min || obs.date < bounds.min) bounds.min = obs.date;
+                if (!bounds.max || obs.date > bounds.max) bounds.max = obs.date;
+                return bounds;
+            }, {min: '', max: ''});
+            const fromInput = document.getElementById('mpc-date-from');
+            const toInput = document.getElementById('mpc-date-to');
+            if (!fromInput.value) fromInput.value = dateBounds.min;
+            if (!toInput.value) toInput.value = dateBounds.max;
+            const fromDate = fromInput.value || dateBounds.min;
+            const toDate = toInput.value || dateBounds.max;
+            if (fromDate && toDate && fromDate > toDate) {
+                document.getElementById('mpc-status').textContent = langDict[currentLang].mpcInvalidDateRange;
+                return;
+            }
+
+            clearMPCMarkers(false);
+
+            let parsed = 0, excluded = 0;
             let colorIdx = 0;
 
-            lines.forEach(line => {
-                const result = parseMPCLine(line);
-                if (!result) { skipped++; return; }
+            observations.forEach(result => {
+                if (!result.date || result.date < fromDate || result.date > toDate) { excluded++; return; }
+                if (parsed >= MPC_MAX_OBSERVATIONS) { skipped++; return; }
 
                 const { desig, ra_deg, dec_deg } = result;
 
@@ -1390,19 +1563,17 @@
                 if (!mpcObjects[desig]) {
                     mpcObjects[desig] = {
                         meshes: [],
+                        positions: [],
                         color: MPC_COLORS[colorIdx % MPC_COLORS.length],
+                        material: new THREE.MeshBasicMaterial({ color: MPC_COLORS[colorIdx % MPC_COLORS.length] }),
                         ra_deg, dec_deg // 最後一筆位置用於圖例
                     };
                     colorIdx++;
                 }
 
-                // 建立點標示（小球）
+                // 先收集位置，最後每個天體合併成一個 InstancedMesh，避免大量獨立物件拖慢瀏覽器
                 const pos = raDecToVec(ra_deg, dec_deg);
-                const mat = new THREE.MeshBasicMaterial({ color: mpcObjects[desig].color });
-                const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 12), mat);
-                mesh.position.copy(pos);
-                scenes.geo.scene.add(mesh);
-                mpcObjects[desig].meshes.push(mesh);
+                mpcObjects[desig].positions.push(pos);
 
                 // 更新最後一筆位置
                 mpcObjects[desig].ra_deg = ra_deg;
@@ -1411,20 +1582,55 @@
                 parsed++;
             });
 
+            // 每個天體只建立一個批次網格，支援數千筆 MPC 觀測而不建立數千個 Mesh
+            for (const key in mpcObjects) {
+                const obj = mpcObjects[key];
+                const mesh = new THREE.InstancedMesh(MPC_MARKER_GEOMETRY, obj.material, obj.positions.length);
+                const markerTransform = new THREE.Object3D();
+                obj.positions.forEach((pos, index) => {
+                    markerTransform.position.copy(pos);
+                    markerTransform.updateMatrix();
+                    mesh.setMatrixAt(index, markerTransform.matrix);
+                });
+                mesh.instanceMatrix.needsUpdate = true;
+                scenes.geo.scene.add(mesh);
+                obj.meshes.push(mesh);
+                delete obj.positions;
+            }
+
             // 更新狀態與圖例
             const count = Object.keys(mpcObjects).length;
-            document.getElementById('mpc-status').textContent =
-                `已標示 ${count} 個天體，共 ${parsed} 筆觀測（跳過 ${skipped} 行）`;
+            document.getElementById('mpc-status').textContent = parsed === 0
+                ? (excluded ? langDict[currentLang].mpcNoObservationsInRange : langDict[currentLang].mpcNoObservations)
+                : (currentLang === 'zh'
+                    ? `已標示 ${count} 個天體，共 ${parsed} 筆觀測（日期範圍外 ${excluded} 筆，略過 ${skipped} 行）`
+                    : `Marked ${count} object(s), ${parsed} observations (${excluded} outside the date range, ${skipped} skipped)`);
 
             const legend = document.getElementById('mpc-legend');
             legend.innerHTML = '';
-            legend.style.display = 'block';
+            legend.style.display = parsed ? 'block' : 'none';
             for (const key in mpcObjects) {
                 const obj = mpcObjects[key];
                 const hexColor = '#' + obj.color.toString(16).padStart(6, '0');
                 const item = document.createElement('div');
-                item.innerHTML = `<span class="mpc-legend-dot" style="background:${hexColor}"></span><span>${key}</span>`;
+                const dot = document.createElement('span');
+                dot.className = 'mpc-legend-dot';
+                dot.style.background = hexColor;
+                const label = document.createElement('span');
+                label.textContent = key;
+                item.append(dot, label);
                 legend.appendChild(item);
+            }
+        }
+
+        function parseMPCReportSafely() {
+            try {
+                parseMPCReport();
+            } catch (error) {
+                console.error('MPC observation parsing failed:', error);
+                const detail = error && error.message ? error.message : String(error);
+                document.getElementById('mpc-status').textContent =
+                    `${langDict[currentLang].mpcParseError} ${detail}`;
             }
         }
         // ── end MPC 觀測報告 ───────────────────────────────────────────────────
@@ -1434,7 +1640,7 @@
         //  1- 7: 編號 (packed)
         //  9-13: H (絕對星等)
         // 15-19: G (斜率參數)
-        // 21-25: Epoch (packed: K25W10 = 2025-Nov-21.0)
+        // 21-25: Epoch (packed: K25BL = 2025-Nov-21.0)
         // 27-35: M₀ (平近點角, deg)
         // 38-46: ω (近日點幅角, deg)
         // 49-57: Ω (升交點黃經, deg)
@@ -1446,11 +1652,12 @@
         // 108-116: 參考資料
 
         function mpcEpochToJD(packed) {
-            // packed epoch 格式：K25W10
+            // packed epoch 格式：世紀碼 + 年份 + 月碼(1-9/A-C) + 日碼(1-9/A-V)
             // 世紀碼: I=18xx, J=19xx, K=20xx
-            const cenMap = { I: 1800, J: 1900, K: 2000 };
+            const cenMap = { I: 1800, J: 1900, K: 2000, L: 2100 };
+            packed = packed.trim();
+            if (!/^[IJKL]\d{2}[1-9ABC][1-9A-V]$/.test(packed)) return null;
             const cen = cenMap[packed[0]];
-            if (cen === undefined) return null;
             const yr  = parseInt(packed.substring(1, 3), 10);
             // 月份：1-9 = 1-9, A=10, B=11, C=12
             const monStr = packed[3];
@@ -1459,6 +1666,8 @@
             const dayStr = packed[4];
             const day = (dayStr >= '1' && dayStr <= '9') ? parseInt(dayStr) : (dayStr.charCodeAt(0) - 55);
             const fullYear = cen + yr;
+            const daysInMonth = new Date(Date.UTC(fullYear, mon, 0)).getUTCDate();
+            if (day > daysInMonth) return null;
             // 轉 JD：用格里曆
             const a = Math.floor((14 - mon) / 12);
             const y = fullYear + 4800 - a;
@@ -1466,6 +1675,41 @@
             const jdn = day + Math.floor((153 * m + 2) / 5) + 365 * y +
                         Math.floor(y / 4) - Math.floor(y / 100) + Math.floor(y / 400) - 32045;
             return jdn - 0.5; // 0h TT
+        }
+
+        function getMpcObjectDesignation(value) {
+            const raw = String(value || '').trim();
+            if (!raw) return '';
+            if (/^https?:\/\//i.test(raw)) {
+                try {
+                    const url = new URL(raw);
+                    const host = url.hostname.toLowerCase();
+                    if (!['minorplanetcenter.net', 'www.minorplanetcenter.net', 'data.minorplanetcenter.net'].includes(host)) return '';
+                    const fromQuery = (url.searchParams.get('object_id') || url.searchParams.get('desig') || url.searchParams.get('designation') || '').trim();
+                    if (fromQuery) return fromQuery;
+                    const tempFile = url.pathname.match(/\/tmp2\/([^/]+)\.txt$/i);
+                    return tempFile ? decodeURIComponent(tempFile[1]).replace(/_/g, ' ') : '';
+                } catch (_) { return ''; }
+            }
+            return raw.replace(/[\u0000-\u001f]/g, '').slice(0, 100);
+        }
+
+        function openMpcObjectPage() {
+            const input = document.getElementById('mpc-object-ref').value.trim();
+            let desig = getMpcObjectDesignation(input);
+            const status = document.getElementById('mpc-easy-status');
+            if (!desig) {
+                status.textContent = langDict[currentLang].mpcObjectRequired;
+                return;
+            }
+            if (/^\d{4}\s*[a-z]{1,2}\d*$/i.test(desig)) {
+                desig = desig.toUpperCase().replace(/^(\d{4})\s*/, '$1 ');
+            }
+            document.getElementById('mpc-object-ref').value = desig;
+            const isObjectPage = /^https?:\/\//i.test(input) && /\/db_search\/show_object(?:\?|$)/i.test(input);
+            const target = isObjectPage ? input : new URL(`https://minorplanetcenter.net/db_search/show_object?${new URLSearchParams({utf8:'✓', object_id:desig})}`).href;
+            window.open(target, '_blank', 'noopener,noreferrer');
+            status.textContent = `${desig} — ${langDict[currentLang].mpcPageOpened}`;
         }
 
         function parseMPCORB() {
@@ -1479,6 +1723,7 @@
 
             try {
                 // 欄位位置（0-indexed）
+                if (line.length < 103) throw new Error(currentLang === 'zh' ? '資料行不足 103 欄，請貼上完整 MPCORB 固定欄位資料' : 'Line is shorter than 103 columns; paste a complete MPCORB fixed-width record');
                 const epochPacked = line.substring(20, 25).trim();
                 const M0_str  = line.substring(26, 35).trim();
                 const w_str   = line.substring(37, 46).trim();
@@ -1510,14 +1755,29 @@
 
                 const epochDateStr = jdToDateStr(epochJD);
                 const _d = langDict[currentLang];
-                statusEl.innerHTML = `<span style="color:#16a34a;font-weight:bold;">${_d.mpcorbSuccess}</span>　` +
-                    `<b>${namePart || _d.mpcorbUnnamed}</b>　Epoch: ${epochDateStr} (JD ${epochJD.toFixed(1)})`;
+                statusEl.replaceChildren();
+                const success = document.createElement('span');
+                success.style.cssText = 'color:#16a34a;font-weight:bold;';
+                success.textContent = _d.mpcorbSuccess;
+                const name = document.createElement('b');
+                name.textContent = namePart || _d.mpcorbUnnamed;
+                statusEl.append(success, document.createTextNode('　'), name,
+                    document.createTextNode(`　Epoch: ${epochDateStr} (JD ${epochJD.toFixed(1)})`));
 
             } catch(err) {
                 const _d = langDict[currentLang];
-                statusEl.innerHTML = `<span style="color:#dc2626;">${_d.mpcorbFail}${err.message}</span>`;
+                statusEl.textContent = `${_d.mpcorbFail}${err.message}`;
             }
         }
+
+        document.getElementById('btn-open-mpc-object').addEventListener('click', openMpcObjectPage);
+        document.getElementById('mpc-object-ref').addEventListener('keydown', ev => {
+            if (ev.key === 'Enter') { ev.preventDefault(); openMpcObjectPage(); }
+        });
+        document.getElementById('mpc-input').addEventListener('paste', () => {
+            document.getElementById('mpc-status').textContent = langDict[currentLang].mpcPasteParsing;
+            setTimeout(parseMPCReportSafely, 0);
+        });
         // ── end MPCORB ─────────────────────────────────────────────────────────
 
 
@@ -1639,7 +1899,7 @@
         // ── end Tooltip ────────────────────────────────────────────────────────
 
         window.onload = () => {
-            // 初始載入穀神星，Epoch 2025-Nov-21.0 = JD 2461000.5 (MPC K25W10)
+            // 初始載入穀神星，Epoch 2025-Nov-21.0 = JD 2461000.5 (MPC K25BL)
             setPreset(2.76916515, 0.07687242, 10.58888, 80.30553, 73.59769, 299.79, document.getElementById('btn-ceres'), 2461000.5);
             updateMoonOrbitGeometry();
             resizeCanvases();
@@ -1682,11 +1942,17 @@
                 // Toggle labels
                 lighting: "Real Sunlight",
                 moon: "Show Moon System",
+                planetOrbits: "Show planetary orbits (Mercury–Neptune)",
                 geoOrbit: "Show Orbit on Celestial Sphere",
                 geoTrail: "Show Past Trail on Celestial Sphere",
                 trailDays: "Trail length:",
                 daysUnit: "days",
                 // MPCORB
+                mpcSearchLabel: "MPC:",
+                mpcSearchAccessibleLabel: "Search MPC",
+                mpcObjectPlaceholder: "Asteroid ID",
+                mpcObjectRequired: "Enter an MPC object name or page URL first.",
+                mpcPageOpened: "MPC object page opened.",
                 mpcorbTitle: "🔭 MPCORB Orbital Elements Parser:",
                 dataSource: "Data source:",
                 mpcorbHint: "Find all objects in 80-column format in MPCORB.DAT",
@@ -1695,7 +1961,16 @@
                 // MPC obs
                 mpcTitle: "📋 MPC Observation Report Markers:",
                 mpcSource: "Data source:",
-                mpcHint: "Search for an object, copy & paste observation data from the download section",
+                mpcHint: "Search MPC, paste the observation rows below to mark them automatically, then choose a date range",
+                mpcNoObservations: "No observations recognized. Paste MPC observation rows, not the webpage URL.",
+                mpcNoObservationsInRange: "No observations fall within the selected date range.",
+                mpcPasteParsing: "Pasted data received; parsing and marking…",
+                mpcCleared: "Markers cleared.",
+                mpcParseError: "Could not finish marking observations:",
+                mpcDateFrom: "From",
+                mpcDateTo: "To",
+                mpcDateApply: "Apply range",
+                mpcInvalidDateRange: "Start date must be on or before the end date.",
                 btnParseMpc: "Parse & Mark",
                 btnClearMpc: "Clear Markers",
                 mpcNoReport: "No report loaded",
@@ -1758,10 +2033,16 @@
                 btnToday: "今天日期",
                 lighting: "真實太陽光影",
                 moon: "顯示月球系統",
+                planetOrbits: "在太陽系視圖顯示水星至海王星軌道",
                 geoOrbit: "在天球上，顯示天體公轉軌道",
                 geoTrail: "在天球上，顯示天體過去路徑",
                 trailDays: "天體過去路徑長度設定:",
                 daysUnit: "天",
+                mpcSearchLabel: "MPC：",
+                mpcSearchAccessibleLabel: "搜尋 MPC",
+                mpcObjectPlaceholder: "小行星編號",
+                mpcObjectRequired: "請先輸入 MPC 天體名稱或頁面網址。",
+                mpcPageOpened: "已開啟 MPC 天體頁面。",
                 mpcorbTitle: "🔭 MPCORB 軌道元素解析：",
                 dataSource: "資料來源：",
                 mpcorbHint: "可在MPCORB.DAT找到所有天體的80欄格式",
@@ -1769,7 +2050,16 @@
                 btnClearMpcorb: "清除",
                 mpcTitle: "📋 MPC 觀測報告標示：",
                 mpcSource: "資料來源：",
-                mpcHint: "搜尋天體，在觀測結果的download中，複製再貼上觀測資料",
+                mpcHint: "在 MPC 搜尋天體後，將觀測資料貼在下方即可自動標示，再選擇日期區間",
+                mpcNoObservations: "沒有辨識到觀測資料。請貼上 MPC 觀測資料，而不是網頁網址。",
+                mpcNoObservationsInRange: "所選日期區間內沒有觀測資料。",
+                mpcPasteParsing: "已貼上資料，正在解析並標示…",
+                mpcCleared: "標示已清除",
+                mpcParseError: "觀測資料標示失敗：",
+                mpcDateFrom: "起始",
+                mpcDateTo: "結束",
+                mpcDateApply: "套用區間",
+                mpcInvalidDateRange: "起始日期必須早於或等於結束日期。",
                 btnParseMpc: "解析並標示",
                 btnClearMpc: "清除標示",
                 mpcNoReport: "尚未載入報告",
@@ -1851,7 +2141,7 @@
             });
 
             // Toggle labels
-            const toggleMap = { 'lbl-lighting':'lighting','lbl-moon':'moon','lbl-geo-orbit':'geoOrbit','lbl-geo-trail':'geoTrail' };
+            const toggleMap = { 'lbl-lighting':'lighting','lbl-moon':'moon','lbl-planet-orbits':'planetOrbits','lbl-geo-orbit':'geoOrbit','lbl-geo-trail':'geoTrail' };
             for (const [id, key] of Object.entries(toggleMap)) {
                 const el = document.getElementById(id);
                 if (el) el.innerText = d[key];
@@ -1861,15 +2151,24 @@
 
             // MPCORB section
             const mpcorbMap = {
+                'lbl-mpc-search-label':'mpcSearchLabel',
                 'lbl-mpcorb-title':'mpcorbTitle','lbl-data-source':'dataSource','lbl-mpcorb-hint':'mpcorbHint',
                 'btn-parse-mpcorb':'btnParseMpcorb','btn-clear-mpcorb':'btnClearMpcorb',
                 'lbl-mpc-title':'mpcTitle','lbl-mpc-source':'mpcSource','lbl-mpc-hint':'mpcHint',
-                'btn-parse-mpc':'btnParseMpc','btn-clear-mpc':'btnClearMpc'
+                'btn-parse-mpc':'btnParseMpc','btn-clear-mpc':'btnClearMpc',
+                'lbl-mpc-date-from':'mpcDateFrom','lbl-mpc-date-to':'mpcDateTo','btn-mpc-date-apply':'mpcDateApply'
             };
             for (const [id, key] of Object.entries(mpcorbMap)) {
                 const el = document.getElementById(id);
                 if (el) el.innerText = d[key];
             }
+            const mpcSearchButton = document.getElementById('btn-open-mpc-object');
+            if (mpcSearchButton) {
+                mpcSearchButton.setAttribute('aria-label', d.mpcSearchAccessibleLabel);
+                mpcSearchButton.title = d.mpcSearchAccessibleLabel;
+            }
+            const mpcObjectInput = document.getElementById('mpc-object-ref');
+            if (mpcObjectInput) mpcObjectInput.placeholder = d.mpcObjectPlaceholder;
             // MPC status reset text only if it still shows the "no report" default
             const mpcStatus = document.getElementById('mpc-status');
             if (mpcStatus && (mpcStatus.innerText === langDict.en.mpcNoReport || mpcStatus.innerText === langDict.zh.mpcNoReport)) {
@@ -1899,10 +2198,22 @@
             applyLang(currentLang);
         });
 
-        // Apply English on load
-        window.addEventListener('DOMContentLoaded', () => {
-            applyLang('en');
-        });
+        // Use Chinese for Chinese browser locales; default all other locales to English.
+        function detectBrowserLanguage() {
+            const browserLanguage = navigator.language || (navigator.languages && navigator.languages[0]) || '';
+            return /^zh(?:[-_]|$)/i.test(browserLanguage) ? 'zh' : 'en';
+        }
+
+        function initializeLanguage() {
+            currentLang = detectBrowserLanguage();
+            applyLang(currentLang);
+        }
+
+        if (document.readyState === 'loading') {
+            window.addEventListener('DOMContentLoaded', initializeLanguage, {once: true});
+        } else {
+            initializeLanguage();
+        }
     </script>
 </body>
 </html>
